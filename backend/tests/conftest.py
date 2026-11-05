@@ -5,8 +5,12 @@ from datetime import date, datetime, timezone
 # Isolated DB and offline mode for every test run; must be set before the app is imported.
 _db = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
 os.environ["DATABASE_URL"] = f"sqlite:///{_db.name}"
-for key in ("OPENAI_API_KEY", "AMADEUS_CLIENT_ID", "AMADEUS_CLIENT_SECRET", "GOOGLE_MAPS_API_KEY", "REDIS_URL"):
+for key in ("OPENAI_API_KEY", "GOOGLE_MAPS_API_KEY", "REDIS_URL"):
     os.environ[key] = ""
+
+os.environ["ADMIN_TOKEN"] = "test-admin-token"
+os.environ["TESTER_CODES"] = ""
+ADMIN = {"Authorization": "Bearer test-admin-token"}
 
 import pytest  # noqa: E402
 

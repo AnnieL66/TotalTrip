@@ -42,31 +42,14 @@ With no configuration the app runs fully offline: SQLite, an in-memory cache, **
 
 For demos and concept testing, the homepage has one-click sample trips (`backend/app/data/demo_trips.json`). The mock fares are set so these trips show a clear door-to-door difference, so their results illustrate the idea and aren't evidence of real savings. If you change fares, `tests/test_demo_trips.py` checks that each trip still tells its story.
 
-Flights use mock data for now (`backend/app/data/fixture_routes.json`). Airlines, schedules and fares there are illustrative and are labeled as demo fares throughout the app. The Amadeus adapter is kept for reference, but Amadeus closed its self-service API in July 2026, so leave `AMADEUS_*` unset.
+On demo fares, the plans page runs a concept test instead of sending people to airline sites: testers pick "I'd book this" (or none of the plans), then answer whether the door-to-door cost would change which flight they book. A result row shows the plan the tester acted on last, with their answer only if it was about that plan. Answers about other plans stay in the `events` table.
 
-## How it works
-
-```
-Next.js ──/api──► FastAPI ──► Trip brief (versioned, with provenance)   ──► PostgreSQL / SQLite
-                     │      ──► Assistant: OpenAI tools  |  offline rules
-                     │      ──► Cost engine (deterministic Python)
-                     │             ├─ Flight adapter: Amadeus | demo fixtures   (cached)
-                     │             ├─ Routing adapter: Google Routes | estimate
-                     │             └─ Tables: bag fees, ride rate cards, transit fares, parking
-                     └─► Events, price reports, spend reports
-```
-
-- **The AI never produces a price.** The assistant can only call `update_brief`, `get_trip_state`, `search_plans` and `get_plans`. Every number comes from `backend/app/engine/`.
-- **Every number is labeled.** Mock flight prices are *demo* fares. Bag fees and transit fares are *quotes* from reference tables. Rides and parking are *estimates* with a low–likely–high range. Every number carries its source and an as-of date.
-- **Engine** (`engine/plans.py`): for each NYC airport × Chicago airport pair, take the cheapest offers each way, price four ground legs per trip (rideshare and transit when it's running; a traveler who chose to drive always drives and parks at home), and build candidates with three ground strategies. It then applies the landing-time constraint (relaxed with a visible note if nothing fits) and scores candidates as total + time value + transfer, early-start and over-budget penalties, weighted by priority. It picks *Lowest booking price*, *Best fit*, *Lowest total cost* and *Least travel time*, merges duplicates, and shows at most 3.
-- **Basic economy** fares that don't include a carry-on are priced as if the bag is checked, with a note.
+Flights use mock data for now (`backend/app/data/fixture_routes.json`). Airlines, schedules and fares there are illustrative. The homepage example and the plans page footer label them as demo fares. There's no live flight provider yet.
 
 ## Before the pilot (not done yet)
 
-1. **Verify the reference data.** `backend/app/data/*.json` holds illustrative bag fees, ride rate cards, transit fares and parking rates (as of 2026-10-01). Check each against official sources and keep the `as_of` dates current.
-2. **Choose a live flight provider, when mock data is no longer enough.** The deck's validation tests below need real prices. The Amadeus adapter can't be used (self-service API closed July 2026), and the SerpApi adapter the plan named as a fallback isn't built.
-3. **Pick and test an OpenAI model.** Set `OPENAI_MODEL`, then test the conversation prompt (`app/ai/agent.py`) with real traveler phrasing.
-4. **Run the deck's validation tests:**
+1. **Pick and test an OpenAI model.** Set `OPENAI_MODEL`, then test the conversation prompt (`app/ai/agent.py`) with real traveler phrasing.
+2. **Run the deck's validation tests:**
    - 20 real trips: do most save $100 or more?
    - 15 travelers: do 6 or more click to book? Track this in `/api/admin/metrics`.
-5. **Production basics:** accounts and auth, protect `/api/admin/*`, DB migrations (Alembic), streaming chat responses, deploy (e.g. Vercel + Render/Fly).
+3. **Production basics:** accounts and auth, DB migrations (Alembic), streaming chat responses, deploy (e.g. Vercel + Render/Fly).

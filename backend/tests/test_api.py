@@ -2,6 +2,8 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 
+from .conftest import ADMIN
+
 
 def test_conversation_to_plans_to_click():
     with TestClient(app) as client:
@@ -36,7 +38,7 @@ def test_conversation_to_plans_to_click():
         r = client.post(f"/api/trips/{trip['id']}/spend", json={"plan_id": plan["id"], "search_id": plans["search_id"], "actual": {"flights": 300, "rides": 120}})
         assert r.json()["estimated_total"] == plan["totals"]["likely"]
 
-        m = client.get("/api/admin/metrics").json()
+        m = client.get("/api/admin/metrics", headers=ADMIN).json()
         assert m["trips_clicked_to_book"] >= 1 and m["spend_reports"] >= 1
 
 

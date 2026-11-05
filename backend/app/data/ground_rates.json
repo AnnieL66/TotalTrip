@@ -1,40 +1,176 @@
 {
-  "as_of": "2026-10-01",
-  "note": "Illustrative planning rates for the launch market. Rideshare totals are estimates, not Uber/Lyft quotes. Verify transit fares and parking rates before the pilot.",
+  "as_of": "2026-11-04",
+  "note": "Planning rates based on public 2026 fares, tolls and parking prices. Rideshare totals are estimates calibrated to published typical prices, not Uber/Lyft quotes.",
   "rideshare": {
     "NYC": {
       "source": "TotalTrip NYC rideshare rate card",
-      "base": 2.55, "per_mile": 1.75, "per_minute": 0.70, "booking_fee": 3.00, "min_fare": 12.00,
-      "avg_mph": 17, "road_factor": 1.35,
-      "airport_fee": {"EWR": 2.50, "LGA": 2.50, "JFK": 2.50},
-      "hudson_toll": 17.00, "nj_airports": ["EWR"],
-      "flag_surcharges": {"cbd96": 2.75, "crz": 1.50, "nj": 0},
-      "low_factor": 0.88, "high_factor": 1.30, "peak_high_factor": 1.55
+      "base": 2.55,
+      "per_mile": 1.5,
+      "per_minute": 0.6,
+      "booking_fee": 3.0,
+      "min_fare": 12.0,
+      "avg_mph": 17,
+      "road_factor": 1.35,
+      "airport_fee": {
+        "EWR": 2.5,
+        "LGA": 2.5,
+        "JFK": 2.5
+      },
+      "hudson_toll": 16.79,
+      "nj_airports": [
+        "EWR"
+      ],
+      "flag_surcharges": {
+        "cbd96": 2.75,
+        "crz": 1.5,
+        "nj": 0
+      },
+      "low_factor": 0.88,
+      "high_factor": 1.3,
+      "peak_high_factor": 1.55
     },
     "CHI": {
       "source": "TotalTrip Chicago rideshare rate card",
-      "base": 1.90, "per_mile": 1.20, "per_minute": 0.35, "booking_fee": 2.85, "min_fare": 9.00,
-      "avg_mph": 24, "road_factor": 1.30,
-      "airport_fee": {"ORD": 5.00, "MDW": 5.00},
-      "flag_surcharges": {"downtown": 1.75},
-      "low_factor": 0.88, "high_factor": 1.30, "peak_high_factor": 1.55
+      "base": 1.9,
+      "per_mile": 0.95,
+      "per_minute": 0.22,
+      "booking_fee": 2.85,
+      "min_fare": 9.0,
+      "avg_mph": 24,
+      "road_factor": 1.3,
+      "airport_fee": {
+        "ORD": 5.0,
+        "MDW": 5.0
+      },
+      "flag_surcharges": {
+        "downtown": 1.75
+      },
+      "low_factor": 0.88,
+      "high_factor": 1.3,
+      "peak_high_factor": 1.55
     },
-    "peak_hours": [[7, 10], [16, 19]],
-    "peak_time_factor": 1.30
+    "peak_hours": [
+      [
+        7,
+        10
+      ],
+      [
+        16,
+        19
+      ]
+    ],
+    "peak_time_factor": 1.3
   },
   "transit": {
-    "EWR": {"label": "AirTrain + NJ Transit", "source": "NJ Transit / Port Authority fare table", "fare": 16.00, "hub": {"name": "Penn Station", "lat": 40.7506, "lng": -73.9935}, "hub_minutes": 40, "local_fare": 2.90, "local_label": "subway", "service": ["05:00", "23:59"], "from_nj": {"label": "AirTrain + NJ Transit", "fare": 8.50, "hub": {"name": "Newark Penn Station", "lat": 40.7347, "lng": -74.1644}, "hub_minutes": 15, "local_fare": 3.00, "local_label": "PATH"}},
-    "LGA": {"label": "Q70 bus + subway", "source": "MTA fare table", "fare": 2.90, "hub": {"name": "Jackson Heights", "lat": 40.7466, "lng": -73.8913}, "hub_minutes": 15, "local_fare": 0, "local_label": "subway", "service": ["05:00", "23:59"]},
-    "JFK": {"label": "AirTrain + subway", "source": "MTA / Port Authority fare table", "fare": 11.40, "hub": {"name": "Jamaica", "lat": 40.6996, "lng": -73.8080}, "hub_minutes": 12, "local_fare": 0, "local_label": "subway", "service": ["05:00", "23:59"]},
-    "ORD": {"label": "CTA Blue Line", "source": "CTA fare table", "fare": 5.00, "hub": {"name": "Clark/Lake", "lat": 41.8857, "lng": -87.6309}, "hub_minutes": 45, "local_fare": 0, "local_label": "CTA", "service": ["04:30", "23:59"]},
-    "MDW": {"label": "CTA Orange Line", "source": "CTA fare table", "fare": 2.50, "hub": {"name": "Harold Washington Library", "lat": 41.8768, "lng": -87.6282}, "hub_minutes": 30, "local_fare": 0, "local_label": "CTA", "service": ["04:00", "23:59"]},
+    "EWR": {
+      "label": "AirTrain + NJ Transit",
+      "source": "NJ Transit / Port Authority fare table",
+      "fare": 16.8,
+      "hub": {
+        "name": "Penn Station",
+        "lat": 40.7506,
+        "lng": -73.9935
+      },
+      "hub_minutes": 40,
+      "local_fare": 3.0,
+      "local_label": "subway",
+      "service": [
+        "04:30",
+        "23:59"
+      ],
+      "from_nj": {
+        "label": "AirTrain + NJ Transit",
+        "fare": 11.95,
+        "hub": {
+          "name": "Newark Penn Station",
+          "lat": 40.7347,
+          "lng": -74.1644
+        },
+        "hub_minutes": 20,
+        "local_fare": 3.25,
+        "local_label": "PATH"
+      }
+    },
+    "LGA": {
+      "label": "Q70 bus (free) + subway",
+      "source": "MTA fare table",
+      "fare": 3.0,
+      "hub": {
+        "name": "Jackson Heights",
+        "lat": 40.7466,
+        "lng": -73.8913
+      },
+      "hub_minutes": 15,
+      "local_fare": 0,
+      "local_label": "subway",
+      "service": [
+        "00:00",
+        "23:59"
+      ]
+    },
+    "JFK": {
+      "label": "AirTrain + subway",
+      "source": "MTA / Port Authority fare table",
+      "fare": 11.75,
+      "hub": {
+        "name": "Jamaica",
+        "lat": 40.6996,
+        "lng": -73.808
+      },
+      "hub_minutes": 12,
+      "local_fare": 0,
+      "local_label": "subway",
+      "service": [
+        "00:00",
+        "23:59"
+      ]
+    },
+    "ORD": {
+      "label": "CTA Blue Line",
+      "source": "CTA fare table",
+      "fare": 5.0,
+      "hub": {
+        "name": "Clark/Lake",
+        "lat": 41.8857,
+        "lng": -87.6309
+      },
+      "hub_minutes": 45,
+      "local_fare": 0,
+      "local_label": "CTA",
+      "service": [
+        "00:00",
+        "23:59"
+      ]
+    },
+    "MDW": {
+      "label": "CTA Orange Line",
+      "source": "CTA fare table",
+      "fare": 2.5,
+      "hub": {
+        "name": "Harold Washington Library",
+        "lat": 41.8768,
+        "lng": -87.6282
+      },
+      "hub_minutes": 30,
+      "local_fare": 0,
+      "local_label": "CTA",
+      "service": [
+        "04:00",
+        "23:59"
+      ]
+    },
     "local_mph": 12,
     "walk_wait_minutes": 10,
-    "walk_only_miles": 0.7
+    "walk_only_miles": 0.7,
+    "nj_to_ny_fare": 3.25
   },
   "driving": {
-    "source": "TotalTrip driving + parking table",
-    "cost_per_mile": 0.30,
-    "parking_per_day": {"EWR": 24.00, "LGA": 35.00, "JFK": 22.00}
+    "source": "TotalTrip driving + parking table (drive-up economy or daily lot rates)",
+    "cost_per_mile": 0.3,
+    "parking_per_day": {
+      "EWR": 35.0,
+      "LGA": 55.0,
+      "JFK": 29.0
+    }
   }
 }

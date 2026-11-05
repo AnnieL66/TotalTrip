@@ -5,7 +5,14 @@ from sqlalchemy.orm import Session
 
 from .. import brief as B
 from ..db import Trip
-from ..trips import RateLimited, UnsearchableDates, current_brief, latest_search, run_search, update_brief
+from ..trips import (
+    RateLimited,
+    UnsearchableDates,
+    current_brief,
+    latest_search,
+    run_search,
+    update_brief,
+)
 
 BRIEF_FIELDS_SCHEMA = {
     "type": "object",

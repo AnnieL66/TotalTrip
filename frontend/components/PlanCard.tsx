@@ -4,10 +4,25 @@ import { useState } from "react";
 import { api, money, outboundUrl } from "@/lib/api";
 import type { LineItem, Plan } from "@/lib/types";
 import { Badge } from "./Badge";
+import { ConceptQuestion } from "./ConceptQuestion";
 
 const MODE_ICON: Record<string, string> = { flight: "✈", bags: "🧳", rideshare: "🚗", transit: "🚆", drive: "🚙", parking: "🅿" };
 
-export function PlanCard({ plan, tripId, searchId }: { plan: Plan; tripId: string; searchId: string }) {
+export function PlanCard({
+  plan,
+  tripId,
+  searchId,
+  demo = false,
+  chosen = false,
+  onChoose,
+}: {
+  plan: Plan;
+  tripId: string;
+  searchId: string;
+  demo?: boolean;
+  chosen?: boolean;
+  onChoose?: () => void;
+}) {
   const [open, setOpen] = useState(false);
   const [reporting, setReporting] = useState(false);
   const bookings = mergeFlights(plan);
@@ -87,37 +102,39 @@ export function PlanCard({ plan, tripId, searchId }: { plan: Plan; tripId: strin
         <div className="mt-4 space-y-4 border-t border-line pt-4 text-sm">
           <p className="text-muted">{plan.convenience.summary}</p>
           <Timeline plan={plan} />
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted">Where the numbers come from</p>
-            <ul className="mt-1.5 space-y-1 text-xs text-muted">
-              {[...new Set(plan.items.map((i) => `${i.source}${i.as_of ? ` (as of ${i.as_of.slice(0, 10)})` : ""}`))].map((s) => (
-                <li key={s}>• {s}</li>
+          {!demo && (
+            <div className="flex flex-wrap gap-2">
+              {plan.booking_links.map((l) => (
+                <a
+                  key={l.url}
+                  href={outboundUrl(l.url, tripId, plan.id, searchId)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded-full bg-plum px-4 py-2 text-sm font-medium text-white"
+                >
+                  Continue on {l.label} ↗
+                </a>
               ))}
-              <li>
-                • Rides are estimates with a likely range.{" "}
-                {plan.items.some((i) => i.kind === "demo")
-                  ? "Flight prices are demo fares, so the airline's real price will differ."
-                  : "Flights and bag fees are quotes that can change until you book."}
-              </li>
-            </ul>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {plan.booking_links.map((l) => (
-              <a
-                key={l.url}
-                href={outboundUrl(l.url, tripId, plan.id, searchId)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded-full bg-plum px-4 py-2 text-sm font-medium text-white"
-              >
-                Continue on {l.label} ↗
-              </a>
-            ))}
-            <button type="button" onClick={() => setReporting(!reporting)} className="text-xs text-plum underline">
-              See a different price?
-            </button>
-          </div>
-          {reporting && <PriceReport tripId={tripId} plan={plan} onDone={() => setReporting(false)} />}
+              <button type="button" onClick={() => setReporting(!reporting)} className="text-xs text-plum underline">
+                See a different price?
+              </button>
+            </div>
+          )}
+          {!demo && reporting && <PriceReport tripId={tripId} plan={plan} onDone={() => setReporting(false)} />}
+        </div>
+      )}
+
+      {demo && (
+        <div className="mt-4 space-y-3">
+          <button
+            type="button"
+            onClick={onChoose}
+            aria-pressed={chosen}
+            className={`w-full rounded-full border px-4 py-2 text-sm font-medium ${chosen ? "border-plum-600 bg-plum-50 text-plum" : "border-line hover:border-plum-600"}`}
+          >
+            {chosen ? "✓ You'd book this" : "I'd book this"}
+          </button>
+          {chosen && <ConceptQuestion tripId={tripId} searchId={searchId} planId={plan.id} />}
         </div>
       )}
     </article>

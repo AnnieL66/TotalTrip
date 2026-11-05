@@ -29,23 +29,24 @@ def _r(x: float) -> float:
     return float(round(x))
 
 
-def _toll(card: dict, place: geo.Place, airport_code: str) -> float:
-    """The Hudson toll, charged only when the trip crosses the river (NJ place ↔ NY airport, or the reverse)."""
+def _toll(card: dict, place: geo.Place, airport_code: str, to_airport: bool) -> float:
+    """The Hudson toll, charged only when a trip crosses the river into New York. Leaving New York is free."""
     if "hudson_toll" not in card:
         return 0
     place_in_nj = "nj" in place.flags
     airport_in_nj = airport_code in card["nj_airports"]
-    return card["hudson_toll"] if place_in_nj != airport_in_nj else 0
+    entering_ny = place_in_nj if to_airport else airport_in_nj
+    return card["hudson_toll"] if place_in_nj != airport_in_nj and entering_ny else 0
 
 
-def rideshare(place: geo.Place, airport_code: str, when: datetime, routing) -> GroundOption:
+def rideshare(place: geo.Place, airport_code: str, when: datetime, routing, to_airport: bool = True) -> GroundOption:
     ap = geo.airport(airport_code)
     metro = ap["metro"]
     card = rates()["rideshare"][metro]
     drive = routing.drive(place.point, (ap["lat"], ap["lng"]), metro, when)
     fare = card["base"] + card["per_mile"] * drive.miles + card["per_minute"] * drive.minutes + card["booking_fee"]
     fare = max(fare, card["min_fare"])
-    toll = _toll(card, place, airport_code)
+    toll = _toll(card, place, airport_code, to_airport)
     fees = card["airport_fee"].get(airport_code, 0) + toll
     fees += sum(card["flag_surcharges"].get(f, 0) for f in place.flags)
     likely = fare + fees
@@ -96,6 +97,8 @@ def transit(place: geo.Place, airport_code: str, checked_bags: int, *, start: da
     if not _in_service(start, info["service"]):
         return None
     fare = info["fare"] + (0 if walk_only else info["local_fare"])
+    if "nj" in place.flags and "from_nj" not in info and geo.airport(airport_code)["metro"] == "NYC":
+        fare += t["nj_to_ny_fare"]  # PATH across the Hudson to reach a New York airport
     label = info["label"] if walk_only or not info["local_fare"] else f"{info['label']} + {info['local_label']}"
     notes = [f"Via {info['hub']['name']}"]
     if checked_bags:
@@ -116,12 +119,12 @@ def transit(place: geo.Place, airport_code: str, checked_bags: int, *, start: da
     )
 
 
-def drive_self(place: geo.Place, airport_code: str, when: datetime, routing) -> GroundOption:
+def drive_self(place: geo.Place, airport_code: str, when: datetime, routing, to_airport: bool = True) -> GroundOption:
     """Driving your own car one way. Parking is added once per trip by the plan builder."""
     ap = geo.airport(airport_code)
     drive = routing.drive(place.point, (ap["lat"], ap["lng"]), ap["metro"], when)
     card = rates()["rideshare"][ap["metro"]]
-    cost = drive.miles * rates()["driving"]["cost_per_mile"] + _toll(card, place, airport_code)
+    cost = drive.miles * rates()["driving"]["cost_per_mile"] + _toll(card, place, airport_code, to_airport)
     return GroundOption(
         mode="drive",
         label="Drive yourself",

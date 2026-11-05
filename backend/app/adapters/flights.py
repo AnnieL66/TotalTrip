@@ -1,21 +1,16 @@
-"""Flight search adapters. All return the same FlightOffer shape so sources can be swapped."""
+"""Flight sources. Each returns the same FlightOffer shape, so a live provider can be added next to the demo fares."""
 from __future__ import annotations
 
 import hashlib
 import json
-import logging
 from dataclasses import asdict, dataclass
 from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache
 from zoneinfo import ZoneInfo
 
-import httpx
-
 from .. import clock, geo
 from ..cache import get_json, set_json
 from ..config import DATA_DIR, settings
-
-log = logging.getLogger(__name__)
 
 
 @dataclass
@@ -29,10 +24,9 @@ class FlightOffer:
     depart: str  # ISO 8601 with offset, local to origin airport
     arrive: str  # ISO 8601 with offset, local to destination airport
     duration_min: int
-    stops: int
     fare_class: str  # "main" | "basic"
     fare: float  # per traveler, USD, taxes included
-    kind: str  # "quote" (live) | "demo"
+    kind: str  # "quote" | "demo"
     source: str
     as_of: str
     booking_url: str
@@ -44,10 +38,6 @@ class FlightOffer:
     @property
     def arrive_dt(self) -> datetime:
         return datetime.fromisoformat(self.arrive)
-
-
-class FlightSearchError(RuntimeError):
-    pass
 
 
 def _now_iso() -> str:
@@ -103,7 +93,6 @@ class FixtureFlights:
                             depart=depart.isoformat(),
                             arrive=arrive.isoformat(),
                             duration_min=duration,
-                            stops=0,
                             fare_class=fare_class,
                             fare=float(round(base * self._multiplier(seed, depart, day))),
                             kind="demo",
@@ -130,95 +119,8 @@ class FixtureFlights:
         return m
 
 
-class AmadeusFlights:
-    """Amadeus Flight Offers Search (v2). Requires AMADEUS_CLIENT_ID / AMADEUS_CLIENT_SECRET.
-
-    Not yet exercised against a live account; verify field mapping when keys arrive.
-    """
-
-    name = "amadeus"
-    source = "Amadeus flight offers"
-
-    def __init__(self) -> None:
-        self._token: tuple[str, datetime] | None = None
-
-    def _auth(self, client: httpx.Client) -> str:
-        if self._token and self._token[1] > datetime.now(timezone.utc):
-            return self._token[0]
-        resp = client.post(
-            f"{settings.amadeus_host}/v1/security/oauth2/token",
-            data={
-                "grant_type": "client_credentials",
-                "client_id": settings.amadeus_client_id,
-                "client_secret": settings.amadeus_client_secret,
-            },
-        )
-        resp.raise_for_status()
-        body = resp.json()
-        self._token = (body["access_token"], datetime.now(timezone.utc) + timedelta(seconds=body["expires_in"] - 60))
-        return self._token[0]
-
-    def search(self, origin: str, destination: str, day: date) -> list[FlightOffer]:
-        try:
-            with httpx.Client(timeout=20) as client:
-                token = self._auth(client)
-                resp = client.get(
-                    f"{settings.amadeus_host}/v2/shopping/flight-offers",
-                    headers={"Authorization": f"Bearer {token}"},
-                    params={
-                        "originLocationCode": origin,
-                        "destinationLocationCode": destination,
-                        "departureDate": day.isoformat(),
-                        "adults": 1,
-                        "nonStop": "true",
-                        "currencyCode": "USD",
-                        "max": 30,
-                    },
-                )
-                resp.raise_for_status()
-        except httpx.HTTPError as exc:
-            raise FlightSearchError(f"Amadeus search failed: {exc}") from exc
-        return self._parse(resp.json(), origin, destination)
-
-    def _parse(self, body: dict, origin: str, destination: str) -> list[FlightOffer]:
-        as_of = _now_iso()
-        o_tz, d_tz = ZoneInfo(geo.airport(origin)["tz"]), ZoneInfo(geo.airport(destination)["tz"])
-        offers = []
-        for item in body.get("data", []):
-            segments = item["itineraries"][0]["segments"]
-            first, last = segments[0], segments[-1]
-            code = first["carrierCode"]
-            if code not in geo.airport_data()["airlines"]:
-                continue  # bag-fee table doesn't cover this carrier yet
-            fare_detail = item["travelerPricings"][0]["fareDetailsBySegment"][0]
-            branded = (fare_detail.get("brandedFare") or "").upper()
-            depart = datetime.fromisoformat(first["departure"]["at"]).replace(tzinfo=o_tz)
-            arrive = datetime.fromisoformat(last["arrival"]["at"]).replace(tzinfo=d_tz)
-            offers.append(
-                FlightOffer(
-                    id=f"amadeus-{item['id']}-{code}{first['number']}",
-                    airline=code,
-                    airline_name=geo.airline(code)["name"],
-                    flight_number=f"{code}{first['number']}",
-                    origin=origin,
-                    destination=destination,
-                    depart=depart.isoformat(),
-                    arrive=arrive.isoformat(),
-                    duration_min=int((arrive - depart).total_seconds() // 60),
-                    stops=len(segments) - 1,
-                    fare_class="basic" if "BASIC" in branded else "main",
-                    fare=float(item["price"]["grandTotal"]),
-                    kind="quote",
-                    source=self.source,
-                    as_of=as_of,
-                    booking_url=geo.airline(code)["site"],
-                )
-            )
-        return offers
-
-
 def get_flight_adapter():
-    return AmadeusFlights() if settings.flight_data_mode == "live" else FixtureFlights()
+    return FixtureFlights()
 
 
 def search_cached(adapter, origin: str, destination: str, day: date, refresh: bool = False) -> list[FlightOffer]:

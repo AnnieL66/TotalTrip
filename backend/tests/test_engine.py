@@ -1,9 +1,11 @@
-from datetime import time
+from datetime import date, datetime, time
 
 from app import brief as B
-from app.engine.plans import bag_cost, search_plans
+from app import geo
 from app.adapters.flights import FixtureFlights
-from datetime import date
+from app.adapters.routing import EstimateRouting
+from app.engine.ground import rideshare
+from app.engine.plans import bag_cost, search_plans
 
 
 def _search(b, **updates):
@@ -77,16 +79,12 @@ def test_driving_adds_parking_once(sample_brief):
 def test_basic_economy_without_carry_on_is_priced_as_checked():
     offer = next(o for o in FixtureFlights().search("EWR", "ORD", date(2026, 11, 12)) if o.airline == "UA" and o.fare_class == "basic")
     bags = bag_cost(offer, carry_on=1, checked=0)
-    assert bags.amount == 35 and bags.effective_checked == 1 and bags.notes
+    assert bags.amount == 45 and bags.effective_checked == 1 and bags.notes
 
 
 def test_cheapest_flight_is_not_always_cheapest_trip(sample_brief):
     """From the Upper West Side, the Newark rides (tolls, distance) should cost more than LaGuardia's."""
     result = _search(sample_brief, priority="easiest")
-    from app.engine.ground import rideshare
-    from app.adapters.routing import EstimateRouting
-    from app import geo
-    from datetime import datetime
     when = datetime(2026, 11, 12, 11, 0)
     uws = geo.get_place("upper_west_side")
     ewr = rideshare(uws, "EWR", when, EstimateRouting())

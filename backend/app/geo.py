@@ -4,7 +4,6 @@ import math
 import re
 from dataclasses import dataclass
 from functools import lru_cache
-from zoneinfo import ZoneInfo
 
 from .config import DATA_DIR
 
@@ -56,10 +55,6 @@ def airline(code: str) -> dict:
 
 def metro_airports(metro: str) -> list[str]:
     return airport_data()["metros"][metro]["airports"]
-
-
-def metro_tz(metro: str) -> ZoneInfo:
-    return ZoneInfo(airport_data()["metros"][metro]["tz"])
 
 
 def all_places() -> list[Place]:

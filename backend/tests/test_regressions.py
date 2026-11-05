@@ -4,17 +4,19 @@ from zoneinfo import ZoneInfo
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine, inspect, select, text
 
 from app import brief as B
 from app import geo
 from app.adapters.routing import EstimateRouting
 from app.ai.offline import extract
+from app.db import SessionLocal, SpendReport, add_missing_columns, log_event
 from app.engine.ground import drive_self, rideshare
 from app.engine.plans import search_plans
 from app.engine.rates import rates
 from app.main import app
 
-from .conftest import set_clock
+from .conftest import ADMIN, set_clock
 
 ET = ZoneInfo("America/New_York")
 TODAY = date(2026, 10, 17)
@@ -130,9 +132,9 @@ def test_failed_first_message_leaves_no_orphan_trip(monkeypatch):
 
     monkeypatch.setattr("app.main.respond", boom)
     with TestClient(app, raise_server_exceptions=False) as client:
-        before = client.get("/api/admin/metrics").json()["trips"]
+        before = client.get("/api/admin/metrics", headers=ADMIN).json()["trips"]
         assert client.post("/api/trips", json={"message": "hello"}).status_code == 500
-        assert client.get("/api/admin/metrics").json()["trips"] == before
+        assert client.get("/api/admin/metrics", headers=ADMIN).json()["trips"] == before
 
 
 # ---------------------------------------------------------------- flights already gone
@@ -212,24 +214,26 @@ def test_not_driving_means_no_plan_drives():
 
 
 @pytest.mark.parametrize(
-    "place, airport, crosses",
+    "place, airport, to_airport, crosses",
     [
-        ("upper_west_side", "EWR", True),
-        ("park_slope", "EWR", True),
-        ("jersey_city", "EWR", False),
-        ("hoboken", "EWR", False),
-        ("jersey_city", "LGA", True),
-        ("hoboken", "JFK", True),
-        ("upper_west_side", "LGA", False),
-        ("astoria", "JFK", False),
+        ("upper_west_side", "EWR", True, False),  # leaving New York is free
+        ("upper_west_side", "EWR", False, True),
+        ("park_slope", "EWR", False, True),
+        ("jersey_city", "EWR", True, False),
+        ("hoboken", "EWR", False, False),
+        ("jersey_city", "LGA", True, True),
+        ("jersey_city", "LGA", False, False),
+        ("hoboken", "JFK", True, True),
+        ("upper_west_side", "LGA", True, False),
+        ("astoria", "JFK", False, False),
     ],
 )
-def test_hudson_toll_applies_only_when_crossing(place, airport, crosses):
+def test_hudson_toll_applies_only_when_entering_new_york(place, airport, to_airport, crosses):
     when = datetime(2026, 11, 12, 11, 0, tzinfo=ET)
     routing = EstimateRouting()
     p = geo.get_place(place)
-    ride = rideshare(p, airport, when, routing)
-    drive = drive_self(p, airport, when, routing)
+    ride = rideshare(p, airport, when, routing, to_airport=to_airport)
+    drive = drive_self(p, airport, when, routing, to_airport=to_airport)
     toll = rates()["rideshare"]["NYC"]["hudson_toll"]
     assert any("toll" in n for n in ride.notes) is crosses
 
@@ -252,7 +256,7 @@ def _click(client, trip_id, search, plan_id="A", url=None):
 
 
 def _clicked(client):
-    return client.get("/api/admin/metrics").json()["trips_clicked_to_book"]
+    return client.get("/api/admin/metrics", headers=ADMIN).json()["trips_clicked_to_book"]
 
 
 def test_real_click_counts():
@@ -278,7 +282,7 @@ def test_real_click_counts():
 def test_unverifiable_click_redirects_but_is_not_counted(params):
     with TestClient(app) as client:
         trip_id, search = _trip_with_plans(client)
-        other_id, other = _trip_with_plans(client)
+        _, other = _trip_with_plans(client)
         url = search["plans"][0]["booking_links"][0]["url"]
         swap = {"REAL": trip_id}
         values = {k: swap.get(v, v) for k, v in params.items()}
@@ -304,24 +308,22 @@ def test_click_to_a_site_the_plan_does_not_use_is_not_counted():
 
 
 def test_old_spoofed_clicks_cannot_push_the_rate_over_100_percent():
-    from app.db import SessionLocal, log_event
-
     with TestClient(app) as client:
         _trip_with_plans(client)
         with SessionLocal() as session:
             for i in range(50):
                 log_event(session, "click_to_book", f"spoof{i}")
             session.commit()
-        assert client.get("/api/admin/metrics").json()["click_to_book_rate"] <= 1
+        assert client.get("/api/admin/metrics", headers=ADMIN).json()["click_to_book_rate"] <= 1
 
 
 @pytest.mark.parametrize("name", ["click_to_book", "llm_usage", "plans_searched", "anything"])
 def test_browser_cannot_send_server_only_events(name):
     with TestClient(app) as client:
         trip_id, _ = _trip_with_plans(client)
-        before = client.get("/api/admin/metrics").json()["events"].get(name, 0)
+        before = client.get("/api/admin/metrics", headers=ADMIN).json()["events"].get(name, 0)
         assert client.post("/api/events", json={"name": name, "trip_id": trip_id, "props": {"input_tokens": 10**9}}).status_code == 422
-        assert client.get("/api/admin/metrics").json()["events"].get(name, 0) == before
+        assert client.get("/api/admin/metrics", headers=ADMIN).json()["events"].get(name, 0) == before
 
 
 @pytest.mark.parametrize("name", ["plans_viewed", "plan_explored"])
@@ -337,10 +339,10 @@ def test_event_needs_a_real_trip():
 
 
 @pytest.mark.parametrize("key", ["name", "session", "trip_id"])
-def test_event_props_cannot_collide_with_arguments(key):
+def test_event_props_are_limited_to_known_fields(key):
     with TestClient(app) as client:
         trip_id, _ = _trip_with_plans(client)
-        assert client.post("/api/events", json={"name": "plans_viewed", "trip_id": trip_id, "props": {key: "x"}}).status_code == 200
+        assert client.post("/api/events", json={"name": "plans_viewed", "trip_id": trip_id, "props": {key: "x"}}).status_code == 422
 
 
 # ---------------------------------------------------------------- spend reports
@@ -364,9 +366,6 @@ def test_spend_compares_with_the_search_the_traveler_followed():
 
 
 def test_spend_stores_which_search_it_was_compared_with():
-    from app.db import SessionLocal, SpendReport
-    from sqlalchemy import select
-
     with TestClient(app) as client:
         trip_id, first, _ = _two_searches(client)
         client.post(f"/api/trips/{trip_id}/spend", json={"plan_id": "A", "search_id": first["search_id"], "actual": {"flights": 300}})
@@ -398,18 +397,16 @@ def test_spend_on_no_plan_has_no_estimate():
 
 
 def test_older_reports_with_no_known_search_are_left_out_of_the_average():
-    from app.db import SessionLocal, SpendReport
-
     with TestClient(app) as client:
         trip_id, search = _trip_with_plans(client)
         with SessionLocal() as session:
             session.query(SpendReport).delete()
             session.add(SpendReport(trip_id=trip_id, plan_id="A", estimated_total=100.0, actual={"flights": 5000.0}))
             session.commit()
-        assert client.get("/api/admin/metrics").json()["avg_actual_minus_estimate"] is None
+        assert client.get("/api/admin/metrics", headers=ADMIN).json()["avg_actual_minus_estimate"] is None
         likely = search["plans"][0]["totals"]["likely"]
         client.post(f"/api/trips/{trip_id}/spend", json={"plan_id": "A", "search_id": search["search_id"], "actual": {"flights": likely + 10}})
-        assert client.get("/api/admin/metrics").json()["avg_actual_minus_estimate"] == 10
+        assert client.get("/api/admin/metrics", headers=ADMIN).json()["avg_actual_minus_estimate"] == 10
 
 
 def test_state_reports_the_plan_the_traveler_clicked_through():
@@ -423,10 +420,6 @@ def test_state_reports_the_plan_the_traveler_clicked_through():
 
 
 def test_existing_database_gets_the_new_column(tmp_path):
-    from sqlalchemy import create_engine, inspect, text
-
-    from app.db import add_missing_columns
-
     engine = create_engine(f"sqlite:///{tmp_path / 'old.db'}")
     with engine.begin() as conn:
         conn.execute(text("CREATE TABLE spend_reports (id INTEGER PRIMARY KEY, trip_id VARCHAR(32), plan_id VARCHAR(8), estimated_total FLOAT, actual JSON, note TEXT, created_at DATETIME)"))
@@ -455,10 +448,10 @@ def test_existing_database_gets_the_new_column(tmp_path):
 def test_bad_spend_amounts_are_rejected(actual):
     with TestClient(app) as client:
         trip_id, _ = _trip_with_plans(client)
-        before = client.get("/api/admin/metrics").json()["spend_reports"]
+        before = client.get("/api/admin/metrics", headers=ADMIN).json()["spend_reports"]
         r = client.post(f"/api/trips/{trip_id}/spend", content=f'{{"actual": {actual}}}', headers={"content-type": "application/json"})
         assert r.status_code == 422
-        assert client.get("/api/admin/metrics").json()["spend_reports"] == before
+        assert client.get("/api/admin/metrics", headers=ADMIN).json()["spend_reports"] == before
 
 
 def test_all_spend_categories_are_accepted():
@@ -667,3 +660,38 @@ def test_curly_place_works_in_brief_edits():
         trip = client.post("/api/trips", json={}).json()
         r = client.patch(f"/api/trips/{trip['id']}/brief", json={"origin": "Hell’s Kitchen"}).json()
         assert _fields(r)["origin"] == "midtown"
+
+
+# ---------------------------------------------------------------- moving a trip
+
+
+def test_moving_only_the_departure_later_moves_the_whole_trip(sample_brief):
+    b, notices = B.apply_updates(sample_brief, {"depart_date": "2026-12-20"}, "user_said")
+    assert b["depart_date"]["value"] == "2026-12-20" and b["return_date"]["value"] == "2026-12-24"
+    assert b["depart_date"]["provenance"] == "user_said" and b["return_date"]["provenance"] == "assumed"
+    assert "4-night trip" in notices[0]
+
+
+def test_moving_the_departure_earlier_leaves_the_return_alone(sample_brief):
+    b, notices = B.apply_updates(sample_brief, {"depart_date": "2026-11-10"}, "user_said")
+    assert b["return_date"]["value"] == "2026-11-16" and not notices
+
+
+def test_setting_only_the_return_before_departure_is_still_rejected(sample_brief):
+    b, notices = B.apply_updates(sample_brief, {"return_date": "2026-11-01"}, "user_said")
+    assert b["return_date"]["value"] == "2026-11-16" and "after the departure" in notices[0]
+
+
+def test_a_moved_return_too_far_ahead_is_rejected_with_both_dates_kept(sample_brief):
+    last = (TODAY + timedelta(days=B.MAX_DAYS_AHEAD)).isoformat()
+    b, notices = B.apply_updates(sample_brief, {"depart_date": last}, "user_said")
+    assert b["depart_date"]["value"] == "2026-11-12" and b["return_date"]["value"] == "2026-11-16"
+    assert "after the departure" in notices[0]
+
+
+def test_moving_the_trip_later_works_in_the_brief_and_marks_plans_stale():
+    with TestClient(app) as client:
+        trip_id, _ = _trip_with_plans(client)
+        r = client.patch(f"/api/trips/{trip_id}/brief", json={"depart_date": "2026-12-20"}).json()
+        assert _fields(r)["return_date"] == "2026-12-24"
+        assert "moved your return" in r["errors"][0] and not r["plans"]["is_current"]

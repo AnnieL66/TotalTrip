@@ -1,11 +1,11 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Header } from "@/components/Header";
-import { api, money, rememberTrip } from "@/lib/api";
+import { api, captureTester, money, rememberTrip } from "@/lib/api";
 
-// One-click sample trips; the backend defines each one in app/data/demo_trips.json.
+// One-click trips; the backend defines each one in app/data/demo_trips.json.
 const DEMOS = [
   { key: "newark_trap", label: "A weekend with a checked bag" },
   { key: "newark_fits", label: "A work trip from Hoboken" },
@@ -18,10 +18,10 @@ const INSPIRATION = [
   { title: "Visiting friends", body: "Wicker Park, Logan Square and the Blue Line.", text: "Visiting friends in Wicker Park, leaving from " },
 ];
 
-// Illustrative example for the explainer card: the "newark_trap" sample trip. A backend test keeps these numbers in step.
+// Illustrative example for the explainer card: the "newark_trap" sample trip, on demo fares. A backend test keeps these numbers in step.
 const EXAMPLE = [
-  { airport: "Newark", flights: 243, rides: 268 },
-  { airport: "LaGuardia", flights: 304, rides: 168 },
+  { airport: "Newark", flights: 252, rides: 259 },
+  { airport: "LaGuardia", flights: 301, rides: 174 },
 ];
 
 export default function Discover() {
@@ -30,6 +30,8 @@ export default function Discover() {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(captureTester, []);
 
   async function startDemo(demo: (typeof DEMOS)[number]) {
     if (busy) return;
@@ -40,7 +42,7 @@ export default function Discover() {
       rememberTrip(trip.id, demo.label);
       router.push(`/trip/${trip.id}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't start that sample trip. Is the API running?");
+      setError(err instanceof Error ? err.message : "Couldn't start that trip. Please try again.");
       setBusy(false);
     }
   }
@@ -66,7 +68,7 @@ export default function Discover() {
       rememberTrip(trip.id, text.trim().slice(0, 80));
       router.push(`/trip/${trip.id}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't start your trip. Is the API running?");
+      setError(err instanceof Error ? err.message : "Couldn't start your trip. Please try again.");
       setBusy(false);
     }
   }
@@ -112,8 +114,7 @@ export default function Discover() {
             </button>
           </div>
           {error && <p className="mt-2 text-center text-sm text-warn">{error}</p>}
-          <p className="mt-4 text-center text-xs text-muted">Or try a sample trip:</p>
-          <div className="mt-2 flex flex-wrap justify-center gap-2">
+          <div className="mt-4 flex flex-wrap justify-center gap-2">
             {DEMOS.map((d) => (
               <button
                 key={d.key}
@@ -137,7 +138,7 @@ export default function Discover() {
               end up costing more once you count the rides to and from the airport. TotalTrip counts them for you.
             </p>
           </div>
-          <div className="flex flex-col justify-center gap-3" role="img" aria-label="Illustrative totals: Newark costs more door to door than LaGuardia">
+          <div className="flex flex-col justify-center gap-3" role="img" aria-label="Illustrative totals on demo fares: Newark costs more door to door than LaGuardia">
             {EXAMPLE.map((r) => {
               const total = r.flights + r.rides;
               return (
@@ -154,7 +155,7 @@ export default function Discover() {
             <div className="mt-1 flex gap-4 text-xs text-muted">
               <span className="flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-sm bg-plum-600" /> Flights + bags</span>
               <span className="flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-sm bg-ride" /> Rides to and from the airport</span>
-              <span className="ml-auto">Illustrative</span>
+              <span className="ml-auto">Illustrative demo fares</span>
             </div>
           </div>
         </section>

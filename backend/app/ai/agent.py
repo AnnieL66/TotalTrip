@@ -10,6 +10,7 @@ import logging
 from .. import clock
 from ..config import settings
 from ..db import log_event
+from ..limits import llm_budget_left, record_llm_tokens
 from .offline import OfflineAgent
 from .tools import TOOLS, ToolBox
 
@@ -53,6 +54,8 @@ class OpenAIAgent:
         items.append({"role": "user", "content": f"{text}\n\n[Current trip state: {json.dumps(box.state())}]"})
         usage = {"input_tokens": 0, "output_tokens": 0}
         for _ in range(MAX_TOOL_ROUNDS):
+            # An LLM call takes seconds. Holding a transaction through it would block every other writer.
+            box.session.commit()
             response = self.client.responses.create(
                 model=settings.openai_model,
                 instructions=SYSTEM_PROMPT.format(today=clock.today().isoformat()),
@@ -62,6 +65,7 @@ class OpenAIAgent:
             if response.usage:
                 usage["input_tokens"] += response.usage.input_tokens
                 usage["output_tokens"] += response.usage.output_tokens
+                record_llm_tokens(response.usage.input_tokens + response.usage.output_tokens)
             calls = [item for item in response.output if item.type == "function_call"]
             if not calls:
                 log_event(box.session, "llm_usage", box.trip.id, model=settings.openai_model, **usage)
@@ -70,8 +74,10 @@ class OpenAIAgent:
             for call in calls:
                 try:
                     result = box.execute(call.name, json.loads(call.arguments or "{}"))
+                    box.session.commit()
                 except Exception as exc:  # report tool failures back to the model instead of crashing the turn
                     log.exception("tool %s failed", call.name)
+                    box.session.rollback()
                     result = {"error": f"Tool failed: {exc}"}
                 items.append({"type": "function_call_output", "call_id": call.call_id, "output": json.dumps(result, default=str)})
         log_event(box.session, "llm_usage", box.trip.id, model=settings.openai_model, **usage)
@@ -79,7 +85,12 @@ class OpenAIAgent:
 
 
 def get_agent():
-    return OpenAIAgent() if settings.assistant_mode == "openai" else OfflineAgent()
+    if settings.assistant_mode != "openai":
+        return OfflineAgent()
+    if not llm_budget_left():
+        log.warning("Daily LLM token budget reached; using the offline assistant")
+        return OfflineAgent()
+    return OpenAIAgent()
 
 
 def respond(box: ToolBox, history: list, text: str) -> dict:

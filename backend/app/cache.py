@@ -1,36 +1,51 @@
 """Small cache facade: Redis when REDIS_URL is set, otherwise an in-process TTL dict."""
 import json
+import threading
 import time
 from typing import Any
 
 from .config import settings
 
+MAX_MEMORY_KEYS = 10_000
+
 
 class _MemoryCache:
     def __init__(self) -> None:
         self._store: dict[str, tuple[float, str]] = {}
+        self._lock = threading.RLock()
+
+    def _drop_expired_if_full(self) -> None:
+        if len(self._store) >= MAX_MEMORY_KEYS:
+            now = time.time()
+            self._store = {k: item for k, item in self._store.items() if item[0] >= now}
 
     def get(self, key: str) -> str | None:
-        item = self._store.get(key)
-        if not item:
-            return None
-        expires, value = item
-        if expires < time.time():
-            self._store.pop(key, None)
-            return None
-        return value
+        with self._lock:
+            item = self._store.get(key)
+            if not item:
+                return None
+            expires, value = item
+            if expires < time.time():
+                self._store.pop(key, None)
+                return None
+            return value
 
     def set(self, key: str, value: str, ttl: int) -> None:
-        self._store[key] = (time.time() + ttl, value)
+        with self._lock:
+            self._drop_expired_if_full()
+            self._store[key] = (time.time() + ttl, value)
 
-    def incr(self, key: str, ttl: int) -> int:
-        current = int(self.get(key) or 0) + 1
-        expires = self._store[key][0] if key in self._store else time.time() + ttl
-        self._store[key] = (expires, str(current))
-        return current
+    def incr(self, key: str, ttl: int, amount: int = 1) -> int:
+        with self._lock:
+            self._drop_expired_if_full()
+            current = int(self.get(key) or 0) + amount
+            expires = self._store[key][0] if key in self._store else time.time() + ttl
+            self._store[key] = (expires, str(current))
+            return current
 
     def clear(self) -> None:
-        self._store.clear()
+        with self._lock:
+            self._store.clear()
 
 
 class _RedisCache:
@@ -45,9 +60,9 @@ class _RedisCache:
     def set(self, key: str, value: str, ttl: int) -> None:
         self._r.set(key, value, ex=ttl)
 
-    def incr(self, key: str, ttl: int) -> int:
+    def incr(self, key: str, ttl: int, amount: int = 1) -> int:
         pipe = self._r.pipeline()
-        pipe.incr(key)
+        pipe.incrby(key, amount)
         pipe.expire(key, ttl, nx=True)
         return int(pipe.execute()[0])
 

@@ -1,11 +1,5 @@
 import type { PlanSet, TripState } from "./types";
 
-export class ApiError extends Error {
-  constructor(public status: number, message: string, public detail?: unknown) {
-    super(message);
-  }
-}
-
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`/api${path}`, {
     ...init,
@@ -19,15 +13,41 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       /* non-JSON error body */
     }
     const message =
-      typeof detail === "string" ? detail : (detail as { message?: string })?.message ?? `Request failed (${res.status})`;
-    throw new ApiError(res.status, message, detail);
+      typeof detail === "string" ? detail : (detail as { message?: string })?.message ?? "Something went wrong. Please check your details and try again.";
+    throw new Error(message);
   }
   return res.json() as Promise<T>;
 }
 
+const TESTER_KEY = "tt-tester";
+let tester: string | null = null;
+
+/** Keep the tester code from a shared link (/?t=code), so results can be counted per person. An empty ?t= clears it. */
+export function captureTester() {
+  const raw = new URLSearchParams(window.location.search).get("t");
+  if (raw === null) return;
+  tester = /^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$/.test(raw) ? raw : null;
+  try {
+    if (tester) localStorage.setItem(TESTER_KEY, tester);
+    else localStorage.removeItem(TESTER_KEY);
+  } catch {
+    /* storage unavailable; the code still lasts for this visit */
+  }
+}
+
+function testerCode(): string | undefined {
+  if (tester) return tester;
+  try {
+    return localStorage.getItem(TESTER_KEY) ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export const api = {
-  createTrip: (message?: string) => request<TripState>("/trips", { method: "POST", body: JSON.stringify({ message }) }),
-  createDemoTrip: (key: string) => request<TripState>(`/trips/demo/${key}`, { method: "POST" }),
+  createTrip: (message?: string) => request<TripState>("/trips", { method: "POST", body: JSON.stringify({ message, tester: testerCode() }) }),
+  createDemoTrip: (key: string) =>
+    request<TripState>(`/trips/demo/${key}`, { method: "POST", body: JSON.stringify({ tester: testerCode() }) }),
   getTrip: (id: string) => request<TripState>(`/trips/${id}`),
   sendMessage: (id: string, text: string) =>
     request<TripState>(`/trips/${id}/messages`, { method: "POST", body: JSON.stringify({ text }) }),
@@ -36,9 +56,12 @@ export const api = {
   searchPlans: (id: string, recheck = false) =>
     request<PlanSet>(`/trips/${id}/plans${recheck ? "?recheck=true" : ""}`, { method: "POST" }),
   places: () => request<{ NYC: string[]; CHI: string[] }>("/places"),
-  meta: () => request<{ assistant_mode: string; flight_data: string; routing: string }>("/meta"),
   event: (name: string, trip_id?: string, props: Record<string, unknown> = {}) =>
     request("/events", { method: "POST", body: JSON.stringify({ name, trip_id, props }) }).catch(() => undefined),
+  choosePlan: (id: string, search_id: string, plan_id: string | null) =>
+    request(`/trips/${id}/plan-choice`, { method: "POST", body: JSON.stringify({ search_id, plan_id }) }),
+  answerConcept: (id: string, body: { search_id: string; plan_id: string | null; would_change: string; note: string | null }) =>
+    request(`/trips/${id}/concept-answer`, { method: "POST", body: JSON.stringify(body) }),
   reportPrice: (id: string, body: Record<string, unknown>) =>
     request(`/trips/${id}/price-reports`, { method: "POST", body: JSON.stringify(body) }),
   reportSpend: (id: string, body: Record<string, unknown>) =>

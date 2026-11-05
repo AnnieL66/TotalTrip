@@ -1,21 +1,23 @@
 {
-  "note": "Demo fares for the launch market. Deterministic per date so plans are reproducible. Not live prices.",
-  "block_minutes": {"NYC-CHI": 155, "CHI-NYC": 135},
+  "note": "Mock fares, not live prices. Airlines per route match real 2026 nonstop service; departure times and flight numbers are invented; fares are set near public 2026 price ranges and tuned so the sample trips show a clear difference.",
+  "as_of": "2026-11-04",
+  "block_minutes": {"NYC-CHI": 165, "CHI-NYC": 135},
   "routes": [
-    {"origin": "EWR", "destination": "ORD", "airline": "UA", "fares": {"main": 99, "basic": 79}, "times": ["06:00", "08:30", "12:15", "17:40"]},
-    {"origin": "LGA", "destination": "ORD", "airline": "UA", "fares": {"main": 152, "basic": 112}, "times": ["07:00", "13:00", "18:30"]},
-    {"origin": "LGA", "destination": "ORD", "airline": "AA", "fares": {"main": 148, "basic": 108}, "times": ["06:30", "10:45", "16:15"]},
-    {"origin": "LGA", "destination": "ORD", "airline": "DL", "fares": {"main": 162, "basic": 121}, "times": ["08:00", "14:30"]},
-    {"origin": "LGA", "destination": "MDW", "airline": "WN", "fares": {"main": 124}, "times": ["07:25", "12:40", "19:05"]},
-    {"origin": "JFK", "destination": "ORD", "airline": "AA", "fares": {"main": 158, "basic": 116}, "times": ["09:15", "15:45"]},
-    {"origin": "JFK", "destination": "ORD", "airline": "B6", "fares": {"main": 129, "basic": 89}, "times": ["07:45", "19:30"]},
-
-    {"origin": "ORD", "destination": "EWR", "airline": "UA", "fares": {"main": 99, "basic": 79}, "times": ["07:00", "11:30", "16:45", "19:30"]},
-    {"origin": "ORD", "destination": "LGA", "airline": "UA", "fares": {"main": 152, "basic": 112}, "times": ["08:00", "15:00", "18:00"]},
-    {"origin": "ORD", "destination": "LGA", "airline": "AA", "fares": {"main": 148, "basic": 108}, "times": ["07:15", "12:30", "17:20", "20:05"]},
-    {"origin": "ORD", "destination": "LGA", "airline": "DL", "fares": {"main": 162, "basic": 121}, "times": ["09:30", "16:40"]},
-    {"origin": "MDW", "destination": "LGA", "airline": "WN", "fares": {"main": 124}, "times": ["08:10", "14:20", "18:45"]},
-    {"origin": "ORD", "destination": "JFK", "airline": "AA", "fares": {"main": 158, "basic": 116}, "times": ["10:30", "17:55"]},
-    {"origin": "ORD", "destination": "JFK", "airline": "B6", "fares": {"main": 129, "basic": 89}, "times": ["12:10", "20:15"]}
+    {"origin": "EWR", "destination": "ORD", "airline": "UA", "fares": {"main": 95, "basic": 79}, "times": ["06:00", "07:30", "09:00", "10:30", "12:15", "13:45", "15:15", "17:00", "18:30", "20:00"]},
+    {"origin": "EWR", "destination": "ORD", "airline": "AA", "fares": {"main": 145, "basic": 115}, "times": ["08:15", "14:00", "18:45"]},
+    {"origin": "LGA", "destination": "ORD", "airline": "UA", "fares": {"main": 145, "basic": 114}, "times": ["06:30", "09:00", "11:30", "14:00", "16:30", "19:00"]},
+    {"origin": "LGA", "destination": "ORD", "airline": "AA", "fares": {"main": 139, "basic": 114}, "times": ["06:00", "08:30", "10:45", "13:15", "16:15", "18:45"]},
+    {"origin": "LGA", "destination": "ORD", "airline": "DL", "fares": {"main": 149, "basic": 120}, "times": ["07:00", "10:00", "13:00", "16:00", "19:15"]},
+    {"origin": "LGA", "destination": "MDW", "airline": "WN", "fares": {"main": 209, "basic": 180}, "times": ["06:45", "08:30", "10:15", "12:40", "15:05", "17:20", "19:05"]},
+    {"origin": "JFK", "destination": "ORD", "airline": "AA", "fares": {"main": 135, "basic": 105}, "times": ["07:30", "11:15", "15:45", "19:30"]},
+    {"origin": "JFK", "destination": "ORD", "airline": "DL", "fares": {"main": 139, "basic": 105}, "times": ["08:45", "13:30", "17:15", "20:30"]},
+    {"origin": "ORD", "destination": "EWR", "airline": "UA", "fares": {"main": 95, "basic": 79}, "times": ["06:30", "08:00", "09:30", "11:30", "13:00", "14:45", "16:15", "17:45", "19:15", "20:45"]},
+    {"origin": "ORD", "destination": "EWR", "airline": "AA", "fares": {"main": 145, "basic": 115}, "times": ["07:45", "13:15", "18:00"]},
+    {"origin": "ORD", "destination": "LGA", "airline": "UA", "fares": {"main": 145, "basic": 114}, "times": ["07:00", "09:30", "12:00", "15:00", "18:00", "20:00"]},
+    {"origin": "ORD", "destination": "LGA", "airline": "AA", "fares": {"main": 139, "basic": 114}, "times": ["07:15", "09:45", "12:30", "15:15", "17:20", "20:05"]},
+    {"origin": "ORD", "destination": "LGA", "airline": "DL", "fares": {"main": 149, "basic": 120}, "times": ["08:00", "11:00", "14:00", "16:40", "19:30"]},
+    {"origin": "MDW", "destination": "LGA", "airline": "WN", "fares": {"main": 209, "basic": 180}, "times": ["06:30", "08:10", "10:20", "12:15", "14:20", "16:30", "18:45"]},
+    {"origin": "ORD", "destination": "JFK", "airline": "AA", "fares": {"main": 135, "basic": 105}, "times": ["08:30", "12:30", "17:55", "20:15"]},
+    {"origin": "ORD", "destination": "JFK", "airline": "DL", "fares": {"main": 139, "basic": 105}, "times": ["09:15", "14:15", "18:10", "20:40"]}
   ]
 }

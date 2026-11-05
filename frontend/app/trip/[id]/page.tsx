@@ -57,7 +57,6 @@ export default function TripBriefPage() {
             title={<h1 className="font-serif text-2xl leading-tight">Where will your next story take you?</h1>}
             messages={trip.messages}
             onSend={onSend}
-            assistantMode={trip.assistant_mode}
             suggestions={brief.ready ? ["Compare plans", "I'd rather spend less", "I want the easiest trip"] : []}
           />
         </aside>

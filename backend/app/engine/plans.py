@@ -5,19 +5,16 @@ Deterministic and rule-based. The AI never produces a number that appears here.
 from __future__ import annotations
 
 import itertools
-import logging
 import uuid
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta, timezone
 
 from .. import clock, geo
-from ..adapters.flights import FlightOffer, FlightSearchError, get_flight_adapter, search_cached
+from ..adapters.flights import FlightOffer, get_flight_adapter, search_cached
 from ..adapters.routing import get_routing
 from ..brief import missing_required
 from .ground import GroundOption, drive_self, rideshare, transit
 from .rates import bag_fees, rates
-
-log = logging.getLogger(__name__)
 
 WEIGHTS = {
     # $ value of one minute door to door, $ per transfer, $ for leaving home before 5:30 am
@@ -178,13 +175,13 @@ class Candidate:
 def _home_leg_options(ctx: TripContext, airport_code: str, routing, *, start: datetime, reach_by: datetime | None = None) -> list[GroundOption]:
     """A traveler who chose to drive drives: the car goes to the airport and back, so it's the only option at home."""
     if ctx.will_drive:
-        return [drive_self(ctx.origin, airport_code, start, routing)]
+        return [drive_self(ctx.origin, airport_code, start, routing, to_airport=reach_by is not None)]
     return _leg_options(ctx, ctx.origin, airport_code, routing, start=start, reach_by=reach_by)
 
 
 def _leg_options(ctx: TripContext, place: geo.Place, airport_code: str, routing, *, start: datetime, reach_by: datetime | None = None) -> list[GroundOption]:
     """`start` prices the ride; `reach_by` is when a ride to the airport has to arrive, if that's what sets its start."""
-    opts = [rideshare(place, airport_code, start, routing)]
+    opts = [rideshare(place, airport_code, start, routing, to_airport=reach_by is not None)]
     t = transit(place, airport_code, ctx.checked, start=start, reach_by=reach_by)
     if t:
         opts.append(t)
@@ -272,15 +269,6 @@ def _score(ctx: TripContext, c: Candidate) -> None:
 # ---------------------------------------------------------------- search
 
 
-def _fetch(adapter, origin: str, destination: str, day: date, refresh: bool, notes: list[str]) -> list[FlightOffer]:
-    try:
-        return search_cached(adapter, origin, destination, day, refresh=refresh)
-    except FlightSearchError as exc:
-        log.warning("%s", exc)
-        notes.append(f"Couldn't refresh {origin}→{destination} flights just now; that route is left out.")
-        return []
-
-
 def _prefilter(ctx: TripContext, offers: list[FlightOffer], now: datetime) -> list[FlightOffer]:
     offers = [o for o in offers if o.airline in bag_fees()["fees"] and o.fare_class in bag_fees()["fees"][o.airline] and o.depart_dt > now]
     offers.sort(key=lambda o: o.fare + bag_cost(o, ctx.carry_on, ctx.checked).amount)
@@ -297,8 +285,8 @@ def search_plans(brief: dict, refresh: bool = False) -> dict:
 
     for o_code in geo.metro_airports(ctx.origin.metro):
         for d_code in geo.metro_airports(ctx.destination.metro):
-            outs = _fetch(adapter, o_code, d_code, ctx.depart, refresh, notes)
-            backs = _fetch(adapter, d_code, o_code, ctx.ret, refresh, notes)
+            outs = search_cached(adapter, o_code, d_code, ctx.depart, refresh=refresh)
+            backs = search_cached(adapter, d_code, o_code, ctx.ret, refresh=refresh)
             if not outs or not backs:
                 continue
             candidates += _build_candidates(ctx, _prefilter(ctx, outs, now), _prefilter(ctx, backs, now), routing, now)
@@ -431,7 +419,7 @@ def _title(c: Candidate) -> str:
 
 def _plan_view(ctx: TripContext, c: Candidate, letter: str, tags: list[str], recommended: bool) -> dict:
     items = []
-    for direction, offer, bags in (("Going", c.out, c.out_bags), ("Return", c.back, c.back_bags)):
+    for offer, bags in ((c.out, c.out_bags), (c.back, c.back_bags)):
         items.append({
             "group": "bookings", "category": "flight",
             "label": f"Flight {offer.origin} → {offer.destination}",
@@ -549,7 +537,7 @@ def _comparison(cheapest_booking: dict, best: dict, plans: list[dict]) -> dict:
     elif total_diff < 0:
         parts.append(f"Plan {b['id']} costs about ${-total_diff:,.0f} more overall")
     else:
-        parts.append(f"Both plans cost about the same overall")
+        parts.append("Both plans cost about the same overall")
     if time_diff >= 10:
         parts.append(f"saves {_fmt_minutes(time_diff)} door to door")
     elif time_diff <= -10:

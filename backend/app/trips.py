@@ -10,8 +10,10 @@ from sqlalchemy.orm import Session
 
 from . import brief as B
 from . import clock
-from .config import DATA_DIR
-from .db import BriefVersion, Message, PlanSearch, Trip
+from .cache import cache
+from .config import DATA_DIR, settings
+from .db import BriefVersion, Message, PlanSearch, Trip, log_event
+from .engine.plans import search_plans
 
 
 def create_trip(session: Session) -> Trip:
@@ -94,11 +96,6 @@ class UnsearchableDates(ValueError):
 
 def run_search(session: Session, trip: Trip, refresh: bool = False) -> PlanSearch:
     """Search plans for the current brief, rate-limited per trip, and store the result."""
-    from .cache import cache
-    from .config import settings
-    from .db import log_event
-    from .engine.plans import search_plans
-
     brief = current_brief(session, trip)
     problem = B.date_problem(brief)
     if problem:

@@ -10,28 +10,63 @@ from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
-from pydantic import BaseModel, Field, StringConstraints, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from . import brief as B
-from . import geo
+from . import concept, geo
 from .ai.agent import respond
 from .ai.tools import ToolBox
 from .config import settings
-from .db import Event, Message, PlanSearch, PriceReport, SpendReport, Trip, get_session, init_db, log_event
-from .trips import RateLimited, UnsearchableDates, create_demo_trip, create_trip, current_brief, demo_trips, history, latest_search, run_search, update_brief
+from .db import (
+    Event,
+    Message,
+    PlanSearch,
+    PriceReport,
+    SpendReport,
+    Trip,
+    get_session,
+    init_db,
+    log_event,
+)
+from .limits import (
+    BodyLimit,
+    known_tester,
+    limit_messages,
+    limit_searches,
+    limit_trips,
+    require_admin,
+)
+from .trips import (
+    RateLimited,
+    UnsearchableDates,
+    create_demo_trip,
+    create_trip,
+    current_brief,
+    demo_trips,
+    history,
+    latest_search,
+    run_search,
+    update_brief,
+)
 
 logging.basicConfig(level=logging.INFO)
+log = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     init_db()
+    if not settings.tester_codes:
+        log.warning("TESTER_CODES is not set, so no trip will count toward concept test results")
+    if not settings.admin_token:
+        log.warning("ADMIN_TOKEN is not set, so /api/admin/* is closed to everyone")
     yield
 
 
 app = FastAPI(title="TotalTrip API", version="0.1.0", lifespan=lifespan)
+app.add_middleware(BodyLimit)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
@@ -113,7 +148,15 @@ def _chat(session: Session, trip: Trip, text: str) -> dict:
 # ---------------------------------------------------------------- routes
 
 
-class NewTrip(BaseModel):
+# A short code from the tester's shared link, not their name.
+TesterCode = Annotated[str, StringConstraints(pattern=r"^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$")]
+
+
+class NewDemoTrip(BaseModel):
+    tester: TesterCode | None = None
+
+
+class NewTrip(NewDemoTrip):
     message: str | None = Field(default=None, max_length=2000)
 
 
@@ -121,12 +164,20 @@ class ChatIn(BaseModel):
     text: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)]
 
 
+class EventProps(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    search_id: str | None = Field(default=None, max_length=32)
+    plan: str | None = Field(default=None, max_length=8)
+    plans: int | None = Field(default=None, ge=0, le=100)
+
+
 class EventIn(BaseModel):
     """Only what the browser reports itself. Clicks, searches and LLM usage are logged by the server."""
 
-    trip_id: str
+    trip_id: str = Field(max_length=32)
     name: Literal["plans_viewed", "plan_explored"]
-    props: dict[str, Any] = Field(default_factory=dict)
+    props: EventProps = Field(default_factory=EventProps)
 
 
 Dollars = Annotated[float, Field(ge=0, le=100_000, allow_inf_nan=False)]
@@ -153,14 +204,16 @@ class SpendIn(BaseModel):
         return self
 
 
-@app.get("/api/meta")
-def meta() -> dict:
-    return {
-        "assistant_mode": settings.assistant_mode,
-        "flight_data": settings.flight_data_mode,
-        "routing": "google" if settings.google_maps_api_key else "estimate",
-        "launch_market": {"origin": "New York City area", "destination": "Chicago", "travelers": 1},
-    }
+class PlanChoiceIn(BaseModel):
+    """Concept test: the plan a tester says they'd book. No plan means none of them would work."""
+
+    search_id: str = Field(max_length=32)
+    plan_id: str | None = Field(default=None, max_length=8)
+
+
+class ConceptAnswerIn(PlanChoiceIn):
+    would_change: Literal["yes", "maybe", "no"]
+    note: str | None = Field(default=None, max_length=2000)
 
 
 @app.get("/api/places")
@@ -173,24 +226,24 @@ def places() -> dict:
     return out
 
 
-@app.post("/api/trips")
+@app.post("/api/trips", dependencies=[Depends(limit_trips)])
 def new_trip(body: NewTrip, session: Session = Depends(get_session)) -> dict:
     trip = create_trip(session)
     session.add(Message(trip_id=trip.id, role="assistant", content=GREETING))
-    log_event(session, "trip_created", trip.id, with_message=bool(body.message))
+    log_event(session, "trip_created", trip.id, with_message=bool(body.message), tester=known_tester(body.tester))
     if body.message and body.message.strip():
         return _chat(session, trip, body.message.strip())  # commits the trip with its first turn
     session.commit()
     return _state(session, trip)
 
 
-@app.post("/api/trips/demo/{key}")
-def new_demo_trip(key: str, session: Session = Depends(get_session)) -> dict:
+@app.post("/api/trips/demo/{key}", dependencies=[Depends(limit_trips)])
+def new_demo_trip(key: str, body: NewDemoTrip | None = None, session: Session = Depends(get_session)) -> dict:
     demo = demo_trips().get(key)
     if not demo:
         raise HTTPException(404, "Unknown demo trip")
     trip = create_demo_trip(session, demo)
-    log_event(session, "trip_created", trip.id, demo=key)
+    log_event(session, "trip_created", trip.id, demo=key, tester=known_tester(body.tester) if body else None)
     session.commit()
     return _state(session, trip)
 
@@ -200,7 +253,7 @@ def get_trip(trip_id: str, session: Session = Depends(get_session)) -> dict:
     return _state(session, _trip(session, trip_id))
 
 
-@app.post("/api/trips/{trip_id}/messages")
+@app.post("/api/trips/{trip_id}/messages", dependencies=[Depends(limit_messages)])
 def post_message(trip_id: str, body: ChatIn, session: Session = Depends(get_session)) -> dict:
     return _chat(session, _trip(session, trip_id), body.text)
 
@@ -209,13 +262,16 @@ def post_message(trip_id: str, body: ChatIn, session: Session = Depends(get_sess
 def edit_brief(trip_id: str, updates: dict[str, Any], session: Session = Depends(get_session)) -> dict:
     """Direct edits from the brief panel always count as 'You said'."""
     trip = _trip(session, trip_id)
+    unknown = sorted(set(updates) - B.VALIDATORS.keys())
+    if unknown:
+        raise HTTPException(422, f"Unknown brief fields: {', '.join(unknown[:5])}")
     _, errors = update_brief(session, trip, updates, "user_said", "user")
     log_event(session, "brief_edited", trip.id, fields=list(updates))
     session.commit()
     return {**_state(session, trip), "errors": errors}
 
 
-@app.post("/api/trips/{trip_id}/plans")
+@app.post("/api/trips/{trip_id}/plans", dependencies=[Depends(limit_searches)])
 def search(trip_id: str, recheck: bool = False, session: Session = Depends(get_session)) -> dict:
     trip = _trip(session, trip_id)
     brief = current_brief(session, trip)
@@ -229,15 +285,6 @@ def search(trip_id: str, recheck: bool = False, session: Session = Depends(get_s
         raise HTTPException(429, str(exc)) from exc
     session.commit()
     return _search_view(row, trip)
-
-
-@app.get("/api/trips/{trip_id}/plans")
-def get_plans(trip_id: str, session: Session = Depends(get_session)) -> dict:
-    trip = _trip(session, trip_id)
-    view = _search_view(latest_search(session, trip), trip)
-    if not view:
-        raise HTTPException(404, "No plans yet")
-    return view
 
 
 def _allowed_outbound(url: str) -> bool:
@@ -275,7 +322,7 @@ def outbound(
 @app.post("/api/events")
 def post_event(body: EventIn, session: Session = Depends(get_session)) -> dict:
     trip = _trip(session, body.trip_id)
-    session.add(Event(trip_id=trip.id, name=body.name, props=body.props))
+    session.add(Event(trip_id=trip.id, name=body.name, props=body.props.model_dump(exclude_none=True)))
     session.commit()
     return {"ok": True}
 
@@ -310,7 +357,34 @@ def report_spend(trip_id: str, body: SpendIn, session: Session = Depends(get_ses
             "difference": None if estimated is None else round(actual_total - estimated, 2)}
 
 
-@app.get("/api/admin/metrics")
+def _check_choice(session: Session, trip: Trip, body: PlanChoiceIn) -> None:
+    """A choice has to name this trip's search, and one of its plans unless the tester chose none. Plan letters only mean something within one search."""
+    search = session.get(PlanSearch, body.search_id)
+    if not search or search.trip_id != trip.id:
+        raise HTTPException(422, "That search isn't part of this trip.")
+    if body.plan_id and not _plan_in_search(search, body.plan_id):
+        raise HTTPException(422, "That plan isn't part of this search.")
+
+
+@app.post("/api/trips/{trip_id}/plan-choice")
+def choose_plan(trip_id: str, body: PlanChoiceIn, session: Session = Depends(get_session)) -> dict:
+    trip = _trip(session, trip_id)
+    _check_choice(session, trip, body)
+    log_event(session, "plan_chosen", trip.id, search_id=body.search_id, plan=body.plan_id)
+    session.commit()
+    return {"ok": True}
+
+
+@app.post("/api/trips/{trip_id}/concept-answer")
+def answer_concept_question(trip_id: str, body: ConceptAnswerIn, session: Session = Depends(get_session)) -> dict:
+    trip = _trip(session, trip_id)
+    _check_choice(session, trip, body)
+    log_event(session, "concept_answer", trip.id, search_id=body.search_id, plan=body.plan_id, would_change=body.would_change, note=body.note)
+    session.commit()
+    return {"ok": True}
+
+
+@app.get("/api/admin/metrics", dependencies=[Depends(require_admin)])
 def metrics(session: Session = Depends(get_session)) -> dict:
     """Pilot dashboard numbers: the deck's success measures."""
     counts = dict(session.execute(select(Event.name, func.count()).group_by(Event.name)).all())
@@ -338,4 +412,5 @@ def metrics(session: Session = Depends(get_session)) -> dict:
         "price_reports": session.scalar(select(func.count()).select_from(PriceReport)),
         "spend_reports": len(spend),
         "avg_actual_minus_estimate": round(sum(diffs) / len(diffs), 2) if diffs else None,
+        "concept_test": concept.summarize(concept.trip_rows(session)),
     }

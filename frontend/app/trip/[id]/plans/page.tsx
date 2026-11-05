@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { BriefPanel } from "@/components/BriefPanel";
 import { ChatPanel } from "@/components/ChatPanel";
+import { ConceptQuestion } from "@/components/ConceptQuestion";
 import { Header } from "@/components/Header";
 import { PlanCard } from "@/components/PlanCard";
 import { Failure, Loading } from "@/components/Status";
@@ -20,6 +21,8 @@ export default function PlansPage() {
   const { trip, setTrip, error, send } = useTrip(id);
   const [busy, setBusy] = useState<"search" | "recheck" | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [choice, setChoice] = useState<{ searchId: string; planId: string | null } | null>(null);
+  const [choiceError, setChoiceError] = useState<string | null>(null);
   const viewed = useRef<string | null>(null);
 
   const plans = trip?.plans ?? null;
@@ -51,8 +54,25 @@ export default function PlansPage() {
   if (error) return <Failure message={error} />;
   if (!trip || !plans) return <Loading />;
 
+  const demo = plans.data_mode === "demo";
+  // Plan letters only mean something within one search, so a new search clears the choice.
+  const chosen = choice?.searchId === plans.search_id ? choice : null;
+  async function choose(planId: string | null) {
+    if (!plans || (chosen && chosen.planId === planId)) return;
+    const next = { searchId: plans.search_id, planId };
+    setChoice(next);
+    setChoiceError(null);
+    try {
+      await api.choosePlan(id, plans.search_id, planId);
+    } catch {
+      // Don't show a choice as made if it wasn't saved. A newer click stays as it is.
+      setChoice((current) => (current === next ? chosen : current));
+      setChoiceError("Couldn't save your choice. Please try again.");
+    }
+  }
+
   const field = (n: string) => trip.brief.fields.find((f) => f.name === n);
-  const checked = new Date(plans.checked_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const checked = new Date(plans.checked_at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
   const assumed = trip.brief.fields.filter((f) => f.provenance === "assumed" && f.name !== "travelers");
   const dateRange = [field("depart_date")?.display, field("return_date")?.display]
     .map((d) => d?.replace(/, \d{4}$/, ""))
@@ -60,7 +80,7 @@ export default function PlansPage() {
 
   return (
     <>
-      <Header active="trips" demo={plans.data_mode === "demo"} />
+      <Header active="trips" />
       <main className="mx-auto grid max-w-7xl lg:h-[calc(100vh-3.5rem)] lg:grid-cols-[300px_1fr]">
         <aside className="flex flex-col border-line bg-paper lg:min-h-0 lg:border-r">
           <div className="border-b border-line p-4">
@@ -90,7 +110,6 @@ export default function PlansPage() {
                 await send(t);
               }}
               placeholder="Ask about these plans…"
-              assistantMode={trip.assistant_mode}
               suggestions={["Why is the recommended plan better?", "Tell me about plan A"]}
             />
           </div>
@@ -119,7 +138,7 @@ export default function PlansPage() {
               {busy === "recheck" ? "Rechecking…" : "Recheck"}
             </button>
             <span className="text-muted sm:ml-auto">
-              {plans.data_mode === "demo" ? "Flight prices are demo fares, not live quotes." : "Flights, bags and transit fares are quotes."}{" "}
+              {!demo && "Flights, bags and transit fares are quotes. "}
               <span className="font-medium text-ink">~</span> marks an estimate, with its likely range.
             </span>
           </div>
@@ -144,8 +163,36 @@ export default function PlansPage() {
           ) : (
             <div className="mt-5 grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(min(100%,330px),1fr))]">
               {plans.plans.map((p) => (
-                <PlanCard key={`${plans.search_id}-${p.id}`} plan={p} tripId={id} searchId={plans.search_id} />
+                <PlanCard
+                  key={`${plans.search_id}-${p.id}`}
+                  plan={p}
+                  tripId={id}
+                  searchId={plans.search_id}
+                  demo={demo}
+                  chosen={chosen?.planId === p.id}
+                  onChoose={() => choose(p.id)}
+                />
               ))}
+            </div>
+          )}
+
+          {choiceError && <p className="mt-3 text-sm text-warn" role="alert">{choiceError}</p>}
+
+          {demo && plans.plans.length > 0 && (
+            <div className="mt-4 space-y-3">
+              <button
+                type="button"
+                onClick={() => choose(null)}
+                aria-pressed={chosen?.planId === null}
+                className={`text-sm underline ${chosen?.planId === null ? "font-medium text-plum" : "text-muted hover:text-ink"}`}
+              >
+                None of these would work for me
+              </button>
+              {chosen?.planId === null && (
+                <div className="max-w-xl">
+                  <ConceptQuestion tripId={id} searchId={plans.search_id} planId={null} />
+                </div>
+              )}
             </div>
           )}
 
@@ -157,15 +204,20 @@ export default function PlansPage() {
           )}
 
           <footer className="mt-8 space-y-1 border-t border-line pt-4 text-xs text-muted">
-            <p>A plan isn&apos;t a reservation. Prices can change until you book each part on the provider&apos;s own site.</p>
-            {plans.data_mode === "demo" && <p>Concept prototype: flight prices are illustrative demo fares, not live quotes.</p>}
-            <p>
-              Back from this trip?{" "}
-              <Link href={`/trip/${id}/after`} className="text-plum underline">
-                Tell us what you actually spent
-              </Link>{" "}
-              so our estimates get better.
-            </p>
+            {demo ? (
+              <p>Flight prices are illustrative demo fares, not live quotes. Nothing here gets booked or charged.</p>
+            ) : (
+              <>
+                <p>A plan isn&apos;t a reservation. Prices can change until you book each part on the provider&apos;s own site.</p>
+                <p>
+                  Back from this trip?{" "}
+                  <Link href={`/trip/${id}/after`} className="text-plum underline">
+                    Tell us what you actually spent
+                  </Link>{" "}
+                  so our estimates get better.
+                </p>
+              </>
+            )}
           </footer>
         </section>
       </main>

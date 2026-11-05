@@ -6,10 +6,10 @@ services:
       POSTGRES_USER: totaltrip
       POSTGRES_PASSWORD: totaltrip
       POSTGRES_DB: totaltrip
-    ports: ["5432:5432"]
+    ports: ["127.0.0.1:5432:5432"]  # this machine only: the password is for local development
     volumes: [pgdata:/var/lib/postgresql/data]
   redis:
     image: redis:7
-    ports: ["6379:6379"]
+    ports: ["127.0.0.1:6379:6379"]  # this machine only: Redis has no password here
 volumes:
   pgdata:

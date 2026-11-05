@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-export function Header({ active, demo = true }: { active?: "discover" | "trips"; demo?: boolean }) {
+export function Header({ active }: { active?: "discover" | "trips" }) {
   const nav = (href: string, label: string, key: "discover" | "trips") => (
     <Link
       href={href}
@@ -20,11 +20,6 @@ export function Header({ active, demo = true }: { active?: "discover" | "trips";
           {nav("/", "Discover", "discover")}
           {nav("/trips", "My trips", "trips")}
         </nav>
-        {demo && (
-          <span className="ml-auto hidden rounded-full border border-line px-3 py-1 text-xs text-muted sm:inline">
-            Concept prototype · illustrative prices
-          </span>
-        )}
       </div>
     </header>
   );

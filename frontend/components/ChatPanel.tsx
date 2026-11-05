@@ -10,10 +10,9 @@ interface Props {
   suggestions?: string[];
   title?: React.ReactNode;
   compact?: boolean;
-  assistantMode?: "openai" | "offline";
 }
 
-export function ChatPanel({ messages, onSend, placeholder = "Tell me about your trip…", suggestions = [], title, compact, assistantMode }: Props) {
+export function ChatPanel({ messages, onSend, placeholder = "Tell me about your trip…", suggestions = [], title, compact }: Props) {
   const [text, setText] = useState("");
   const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -99,9 +98,6 @@ export function ChatPanel({ messages, onSend, placeholder = "Tell me about your 
             →
           </button>
         </div>
-        {assistantMode === "offline" && (
-          <p className="mt-1.5 px-2 text-[11px] text-muted">Offline demo assistant. Add an OpenAI key for full conversation.</p>
-        )}
       </form>
     </div>
   );

@@ -177,6 +177,22 @@ VALIDATORS: dict[str, Callable[[Any], tuple[Any, str]]] = {
 }
 
 
+def _return_after_new_departure(brief: dict, updates: dict[str, Any], depart: str) -> dict | None:
+    """Moving only the departure past the return moves the whole trip, keeping its length. Shown as an assumption."""
+    old_dep, old_ret = brief["depart_date"]["value"], brief["return_date"]["value"]
+    if "depart_date" not in updates or "return_date" in updates or not (old_dep and old_ret) or old_ret <= old_dep:
+        return None
+    nights = (date.fromisoformat(old_ret) - date.fromisoformat(old_dep)).days
+    try:
+        value, display = _v_date(date.fromisoformat(depart) + timedelta(days=nights))
+    except BriefError:
+        return None
+    return {
+        "field": {"value": value, "display": display, "provenance": "assumed"},
+        "notice": f"I moved your return to {display} to keep your {nights}-night trip. Change it if that's wrong.",
+    }
+
+
 def apply_updates(brief: dict, updates: dict[str, Any], provenance: Provenance) -> tuple[dict, list[str]]:
     """Validate and merge updates. Returns the new brief and human-readable errors for rejected fields."""
     new = copy.deepcopy(brief)
@@ -196,6 +212,11 @@ def apply_updates(brief: dict, updates: dict[str, Any], provenance: Provenance) 
 
     dep, ret = new["depart_date"]["value"], new["return_date"]["value"]
     if dep and ret and ret <= dep:
+        moved = _return_after_new_departure(brief, updates, dep)
+        if moved:
+            new["return_date"] = moved["field"]
+            errors.append(moved["notice"])
+            return new, errors
         errors.append("The return date needs to be after the departure date.")
         for name in ("depart_date", "return_date"):
             if name in updates:

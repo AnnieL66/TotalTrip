@@ -14,7 +14,6 @@
     "UA": {"name": "United", "site": "https://www.united.com"},
     "AA": {"name": "American", "site": "https://www.aa.com"},
     "DL": {"name": "Delta", "site": "https://www.delta.com"},
-    "WN": {"name": "Southwest", "site": "https://www.southwest.com"},
-    "B6": {"name": "JetBlue", "site": "https://www.jetblue.com"}
+    "WN": {"name": "Southwest", "site": "https://www.southwest.com"}
   }
 }

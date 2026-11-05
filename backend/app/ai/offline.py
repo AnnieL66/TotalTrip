@@ -11,10 +11,12 @@ from datetime import date, timedelta
 
 from .. import brief as B
 from .. import clock, geo
+from ..trips import current_brief
 from .tools import ToolBox
 
-MONTHS = {m: i for i, m in enumerate(
-    ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"], start=1)}
+MONTH_NAMES = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"]
+MONTHS = {m: i for i, m in enumerate(MONTH_NAMES, start=1)}
+WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
 MONTH_RE = r"(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sept?(?:ember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\.?"
 DAY_RE = r"(\d{1,2})(?:st|nd|rd|th)?"
 WORD_NUMS = {"a": 1, "an": 1, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "no": 0, "zero": 0}
@@ -65,9 +67,74 @@ def _num(token: str) -> int:
 
 def _nights_in(t: str) -> int | None:
     m = re.search(r"\b(\d+|one|two|three|four|five|six|seven)\s+nights?\b", t) or re.search(r"\b(a)\s+week\b", t)
-    if not m:
-        return None
-    return 7 if m.group(0).endswith("week") else _num(m.group(1))
+    if m:
+        return 7 if m.group(0).endswith("week") else _num(m.group(1))
+    m = re.search(r"\b(\d+|one|two|three|four|five|six|seven)[\s-]+days?\b", t)
+    if m:  # a 3-day trip is Friday to Sunday: two nights
+        return max(_num(m.group(1)) - 1, 1)
+    if re.search(r"\blong\s+weekend\b", t):
+        return 3
+    return 2 if re.search(r"\ba\s+weekend\b", t) else None
+
+
+def _month_day(d: date) -> str:
+    return f"{MONTH_NAMES[d.month - 1]} {d.day}"
+
+
+def _normalize_dates(t: str, today: date, current_depart: str | None) -> str:
+    """Rewrite the other ways people give dates ("next friday", "12 dec", 2026-12-08) as "dec 12", which `extract` reads."""
+
+    def iso(m: re.Match) -> str:
+        try:
+            d = date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        except ValueError:
+            return m.group(0)
+        # The rewrite drops the year, so leave dates it would move to a different year.
+        return _month_day(d) if today <= d <= today + timedelta(days=B.MAX_DAYS_AHEAD) else m.group(0)
+
+    def day_first(m: re.Match) -> str:
+        if re.search(rf"{MONTH_RE}\s*$", t_so_far[: m.start()]):  # "nov 30 dec 2" is already month first
+            return m.group(0)
+        return f"{m.group(2)} {m.group(1)}"
+
+    def day_range_first(m: re.Match) -> str:
+        if re.search(rf"{MONTH_RE}\s*$", t_so_far[: m.start()]):  # "dec 12 to 15 jan" is already month first
+            return m.group(0)
+        return f"{m.group(3)} {m.group(1)} to {m.group(2)}"
+
+    t = re.sub(r"\b(20\d{2})-(\d{2})-(\d{2})\b", iso, t)
+    t_so_far = t
+    t = re.sub(rf"\b{DAY_RE}\s*(?:-|–|—|to|through|thru|until|till)\s*{DAY_RE}\s+(?:of\s+)?{MONTH_RE}(?![a-z])", day_range_first, t)
+    t_so_far = t
+    t = re.sub(rf"\b{DAY_RE}\s+(?:of\s+)?{MONTH_RE}(?![a-z])", day_first, t)
+    # A weekday next to an explicit date only repeats it ("friday, dec 11"), and the date is what counts.
+    weekdays = "|".join(WEEKDAYS)
+    t = re.sub(rf"\b(?:(?:this|next|coming)\s+)?(?:{weekdays}),?\s+(?={MONTH_RE}\s+{DAY_RE}\b|\d{{1,2}}/\d{{1,2}}\b)", "", t)
+    t = re.sub(rf"\b({MONTH_RE}\s+{DAY_RE}),?\s+(?:{weekdays})\b", r"\1", t)
+    t = re.sub(r"\b(to|through|thru|until|till)\s+the\s+(\d)", r"\1 \2", t)
+    t = re.sub(r"\bday after tomorrow\b", _month_day(today + timedelta(days=2)), t)
+    t = re.sub(r"\btomorrow\b", _month_day(today + timedelta(days=1)), t)
+    t = re.sub(r"\b(leav\w*|fly\w*|go\w*|depart\w*)\s+today\b", lambda m: f"{m.group(1)} {_month_day(today)}", t)
+    t = re.sub(r"\b(this|next)\s+weekend\b", r"\1 friday to sunday", t)
+
+    first = re.search(rf"{MONTH_RE}\s+{DAY_RE}", t)
+    explicit = _year_for(MONTHS[first.group(1)[:3]], int(first.group(2)), today) if first else None
+    anchor: list[date | None] = [None]
+
+    def weekday(m: re.Match) -> str:
+        target = WEEKDAYS.index(m.group(2))
+        if m.group(1) == "next":
+            d = today + timedelta(days=7 - today.weekday() + target)
+        else:
+            base = anchor[0]
+            if base is None and re.search(r"(back|return\w*|home|until|till|to|through|thru)\s+(?:on\s+)?$", t[: m.start()]):
+                base = explicit or (date.fromisoformat(current_depart) if current_depart else None)
+            base = base or today
+            d = base + timedelta(days=(target - base.weekday()) % 7 or 7)
+        anchor[0] = d
+        return _month_day(d)
+
+    return re.sub(rf"\b(?:(this|next|on|coming)\s+)?({'|'.join(WEEKDAYS)})\b", weekday, t)
 
 
 def _is_reversed(text: str, spans: list[tuple[int, int, geo.Place]]) -> bool:
@@ -93,7 +160,7 @@ def extract(text: str, current: dict, today: date | None = None) -> tuple[dict, 
     """Return (fields, signals) found in a message. Signals are non-brief hints (group trip, unsupported city…)."""
     today = today or clock.today()
     text = geo.straighten_quotes(text)
-    t = text.lower()
+    t = _normalize_dates(text.lower(), today, current["depart_date"]["value"])
     fields: dict = {}
     signals: dict = {}
 
@@ -170,8 +237,10 @@ def extract(text: str, current: dict, today: date | None = None) -> tuple[dict, 
             signals["nights"] = n
 
     # Budget
-    m = re.search(rf"(?:under|below|max(?:imum)?|budget(?:\s+(?:of|is))?|less than|up to|no more than|spend)\s*(?:about|around)?\s*\$?\s*(\d[\d,]*(?:\.\d+)?)\s*(k)?\b{NOT_MONEY}", t) \
-        or re.search(r"\$\s*(\d[\d,]*(?:\.\d+)?)\s*(k)?", t)
+    m = re.search(rf"(?:under|below|max(?:imum)?|budget(?:\s+(?:of|is))?|less than|up to|no more than|spend)\s*(?:about|around)?\s*\$?\s*(\d[\d,]*(?:\.\d+)?)\s*(k)?\b{NOT_MONEY}", t)
+    if not m and not re.search(r"\blast time\b", t):
+        # A bare dollar amount is a budget, unless it's describing what something cost.
+        m = re.search(r"(?<!\bwas )(?<!\bwere )(?<!\bcost )(?<!\bcosts )(?<!\bpaid )\$\s*(\d[\d,]*(?:\.\d+)?)\s*(k)?", t)
     if m:
         amount = float(m.group(1).replace(",", "")) * (1000 if m.group(2) else 1)
         fields["budget"] = amount
@@ -179,12 +248,18 @@ def extract(text: str, current: dict, today: date | None = None) -> tuple[dict, 
     # Bags
     if re.search(r"backpack only|personal item only|just a backpack|no carry[- ]?on|only a backpack", t):
         fields["carry_on"], fields["checked_bags"] = 0, 0
-    elif re.search(r"carry[- ]?on", t):
+    elif re.search(r"carry[- ]?on", t):  # "no bags to check, just a carry-on" still brings the carry-on
         fields["carry_on"] = 1
-    m = re.search(r"\b(\d|a|an|one|two|no|zero)\s+checked(?:\s+bags?)?", t) or re.search(r"\bcheck(?:ing)?\s+(a|an|one|two|\d)\s+bags?", t)
+    elif re.search(r"\bno (?:bags?|luggage)\b(?!\s+(?:to\s+check|fees?))", t):
+        fields["carry_on"], fields["checked_bags"] = 0, 0
+    m = (
+        re.search(r"\b(\d|a|an|one|two|no|zero)\s+checked(?:\s+bags?)?", t)
+        or re.search(r"\bcheck(?:ing)?\s+(a|an|one|two|\d)\s+bags?", t)
+        or re.search(r"\b(\d|a|an|one|two|no|zero)\s+(?:(?:big|large)\s+)?suitcases?\b", t)
+    )
     if m:
         fields["checked_bags"] = _num(m.group(1))
-    elif re.search(r"carry[- ]?on only|only (?:a |one )?carry[- ]?on|just (?:a |one )?carry[- ]?on|no checked", t):
+    elif re.search(r"carry[- ]?on only|only (?:a |one )?carry[- ]?on|just (?:a |one )?carry[- ]?on|no checked|\bno (?:bags?|luggage)\s+to\s+check", t):
         fields["checked_bags"] = 0
 
     # Priority
@@ -232,7 +307,7 @@ def _is_question(text: str) -> bool:
 
 
 def _wants_plans(text: str) -> bool:
-    return bool(re.search(r"\b(compare|show (?:me )?(?:the )?plans|find (?:me )?plans|search|see (?:the )?plans|let'?s go|go ahead)\b", text.lower()))
+    return bool(re.search(r"\b(compare|show (?:me )?(?:the )?plans|find (?:me )?plans|search|see (?:the )?plans|let'?s go(?!\s+to\b)|go ahead)\b", text.lower()))
 
 
 def _money(x: float) -> str:
@@ -240,6 +315,13 @@ def _money(x: float) -> str:
 
 
 def explain_plans(summary: dict, text: str) -> str:
+    reply = _explain_plans(summary, text)
+    if summary.get("plans_are_current") is False:
+        return f"Your brief changed since these plans were priced, so these numbers may be out of date. {reply}"
+    return reply
+
+
+def _explain_plans(summary: dict, text: str) -> str:
     plans = {p["id"]: p for p in summary["plans"]}
     asked = re.search(r"\bplan\s+([abc])\b", text.lower())
     comp = summary.get("comparison") or {}
@@ -271,7 +353,7 @@ class OfflineAgent:
 
     def respond(self, box: ToolBox, history: list, text: str) -> dict:
         text = geo.straighten_quotes(text)
-        current = _brief_from_state(box)
+        current = current_brief(box.session, box.trip)
         fields, signals = extract(text, current)
         asking = _is_question(text)
         if asking and box.state()["plans_searched"]:
@@ -359,9 +441,3 @@ def _earlier_nights(history: list) -> int | None:
             if n is not None:
                 return n
     return None
-
-
-def _brief_from_state(box: ToolBox) -> dict:
-    from ..trips import current_brief
-
-    return current_brief(box.session, box.trip)
