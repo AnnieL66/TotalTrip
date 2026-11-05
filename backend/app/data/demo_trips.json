@@ -1,0 +1,17 @@
+{
+  "note": "One-click trips for demos and concept testing. Dates are set when a trip starts. Prices come from the mock fares in fixture_routes.json.",
+  "trips": {
+    "newark_trap": {
+      "message": "A weekend near Millennium Park from the Upper West Side. I'm checking a bag and want the easiest trip.",
+      "brief": {"origin": "upper_west_side", "destination": "millennium_park", "checked_bags": 1, "priority": "easiest"}
+    },
+    "newark_fits": {
+      "message": "A conference at McCormick Place, flying from Hoboken. Just a carry-on.",
+      "brief": {"origin": "hoboken", "destination": "mccormick_place", "checked_bags": 0, "priority": "balanced"}
+    },
+    "tight_budget": {
+      "message": "Visiting friends in Wicker Park from Park Slope. I want to stay under $350 and spend as little as possible.",
+      "brief": {"origin": "park_slope", "destination": "wicker_park", "checked_bags": 0, "priority": "cheapest", "budget": 350}
+    }
+  }
+}

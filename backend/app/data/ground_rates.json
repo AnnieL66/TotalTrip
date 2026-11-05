@@ -23,7 +23,7 @@
     "peak_time_factor": 1.30
   },
   "transit": {
-    "EWR": {"label": "AirTrain + NJ Transit", "source": "NJ Transit / Port Authority fare table", "fare": 16.00, "hub": {"name": "Penn Station", "lat": 40.7506, "lng": -73.9935}, "hub_minutes": 40, "local_fare": 2.90, "local_label": "subway", "service": ["05:00", "23:59"]},
+    "EWR": {"label": "AirTrain + NJ Transit", "source": "NJ Transit / Port Authority fare table", "fare": 16.00, "hub": {"name": "Penn Station", "lat": 40.7506, "lng": -73.9935}, "hub_minutes": 40, "local_fare": 2.90, "local_label": "subway", "service": ["05:00", "23:59"], "from_nj": {"label": "AirTrain + NJ Transit", "fare": 8.50, "hub": {"name": "Newark Penn Station", "lat": 40.7347, "lng": -74.1644}, "hub_minutes": 15, "local_fare": 3.00, "local_label": "PATH"}},
     "LGA": {"label": "Q70 bus + subway", "source": "MTA fare table", "fare": 2.90, "hub": {"name": "Jackson Heights", "lat": 40.7466, "lng": -73.8913}, "hub_minutes": 15, "local_fare": 0, "local_label": "subway", "service": ["05:00", "23:59"]},
     "JFK": {"label": "AirTrain + subway", "source": "MTA / Port Authority fare table", "fare": 11.40, "hub": {"name": "Jamaica", "lat": 40.6996, "lng": -73.8080}, "hub_minutes": 12, "local_fare": 0, "local_label": "subway", "service": ["05:00", "23:59"]},
     "ORD": {"label": "CTA Blue Line", "source": "CTA fare table", "fare": 5.00, "hub": {"name": "Clark/Lake", "lat": 41.8857, "lng": -87.6309}, "hub_minutes": 45, "local_fare": 0, "local_label": "CTA", "service": ["04:30", "23:59"]},

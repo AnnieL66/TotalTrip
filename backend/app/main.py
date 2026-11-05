@@ -20,7 +20,7 @@ from .ai.agent import respond
 from .ai.tools import ToolBox
 from .config import settings
 from .db import Event, Message, PlanSearch, PriceReport, SpendReport, Trip, get_session, init_db, log_event
-from .trips import RateLimited, UnsearchableDates, create_trip, current_brief, history, latest_search, run_search, update_brief
+from .trips import RateLimited, UnsearchableDates, create_demo_trip, create_trip, current_brief, demo_trips, history, latest_search, run_search, update_brief
 
 logging.basicConfig(level=logging.INFO)
 
@@ -180,6 +180,17 @@ def new_trip(body: NewTrip, session: Session = Depends(get_session)) -> dict:
     log_event(session, "trip_created", trip.id, with_message=bool(body.message))
     if body.message and body.message.strip():
         return _chat(session, trip, body.message.strip())  # commits the trip with its first turn
+    session.commit()
+    return _state(session, trip)
+
+
+@app.post("/api/trips/demo/{key}")
+def new_demo_trip(key: str, session: Session = Depends(get_session)) -> dict:
+    demo = demo_trips().get(key)
+    if not demo:
+        raise HTTPException(404, "Unknown demo trip")
+    trip = create_demo_trip(session, demo)
+    log_event(session, "trip_created", trip.id, demo=key)
     session.commit()
     return _state(session, trip)
 

@@ -64,7 +64,11 @@ def _seeded(*parts: str) -> int:
 
 
 class FixtureFlights:
-    """Deterministic demo fares for the launch market. Same inputs, same prices."""
+    """Deterministic demo fares for the launch market. Same inputs, same prices.
+
+    A flight keeps its number, length and base price every day, so demo trips tell the same story
+    whatever date they run on. Fares only move with the day of the week and how far ahead it is.
+    """
 
     name = "demo"
     source = "Demo fares (illustrative)"
@@ -81,7 +85,7 @@ class FixtureFlights:
                 continue
             code = route["airline"]
             for hhmm in route["times"]:
-                seed = _seeded(origin, destination, code, hhmm, day.isoformat())
+                seed = _seeded(origin, destination, code, hhmm)
                 h, m = map(int, hhmm.split(":"))
                 depart = datetime(day.year, day.month, day.day, h, m, tzinfo=o_tz)
                 duration = block + (seed % 3) * 5
@@ -112,7 +116,7 @@ class FixtureFlights:
 
     @staticmethod
     def _multiplier(seed: int, depart: datetime, day: date) -> float:
-        m = 0.84 + (seed % 37) / 100  # 0.84–1.20 day-to-day noise
+        m = 0.84 + (seed % 37) / 100  # 0.84–1.20 per flight
         m *= {4: 1.12, 6: 1.12, 1: 0.94, 2: 0.94}.get(day.weekday(), 1.0)
         if depart.hour < 7:
             m *= 0.9

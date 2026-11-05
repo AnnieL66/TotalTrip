@@ -84,6 +84,8 @@ def transit(place: geo.Place, airport_code: str, checked_bags: int, *, start: da
     """
     t = rates()["transit"]
     info = t[airport_code]
+    if "nj" in place.flags and "from_nj" in info:  # New Jersey travelers reach Newark without going through Manhattan
+        info = {**info, **info["from_nj"]}
     hub = (info["hub"]["lat"], info["hub"]["lng"])
     local_miles = geo.haversine_mi(hub, place.point) * 1.2
     walk_only = local_miles <= t["walk_only_miles"]

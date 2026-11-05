@@ -40,6 +40,8 @@ With no configuration the app runs fully offline: SQLite, an in-memory cache, **
 | `REDIS_URL` | Shared cache and rate limits |
 | `GOOGLE_MAPS_API_KEY` | Traffic-aware drive times (Google Routes) |
 
+For demos and concept testing, the homepage has one-click sample trips (`backend/app/data/demo_trips.json`). The mock fares are set so these trips show a clear door-to-door difference, so their results illustrate the idea and aren't evidence of real savings. If you change fares, `tests/test_demo_trips.py` checks that each trip still tells its story.
+
 Flights use mock data for now (`backend/app/data/fixture_routes.json`). Airlines, schedules and fares there are illustrative and are labeled as demo fares throughout the app. The Amadeus adapter is kept for reference, but Amadeus closed its self-service API in July 2026, so leave `AMADEUS_*` unset.
 
 ## How it works

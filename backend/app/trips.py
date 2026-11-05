@@ -1,10 +1,16 @@
 """Trip state operations shared by the API and the assistants."""
 from __future__ import annotations
 
+import json
+from datetime import date, timedelta
+from functools import lru_cache
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from . import brief as B
+from . import clock
+from .config import DATA_DIR
 from .db import BriefVersion, Message, PlanSearch, Trip
 
 
@@ -13,6 +19,34 @@ def create_trip(session: Session) -> Trip:
     session.add(trip)
     session.flush()
     save_brief(session, trip, B.with_defaults(B.empty_brief()), "assistant")
+    return trip
+
+
+@lru_cache
+def demo_trips() -> dict:
+    return json.loads((DATA_DIR / "demo_trips.json").read_text())["trips"]
+
+
+def demo_dates() -> tuple[date, date]:
+    """Thursday to Monday, at least three weeks out. The same days and lead time keep demo prices the same on any date."""
+    earliest = clock.today() + timedelta(days=21)
+    depart = earliest + timedelta(days=(3 - earliest.weekday()) % 7)
+    return depart, depart + timedelta(days=4)
+
+
+def create_demo_trip(session: Session, demo: dict) -> Trip:
+    """A trip with a finished brief, so a demo can start with one click. It doesn't go through the assistant, so it behaves the same in every mode."""
+    trip = create_trip(session)
+    depart, ret = demo_dates()
+    brief, errors = update_brief(session, trip, {**demo["brief"], "depart_date": depart.isoformat(), "return_date": ret.isoformat()}, "user_said", "user")
+    if errors:
+        raise ValueError(f"Bad demo trip: {errors}")
+    reply = (
+        f"Got it. I filled in your trip brief for {brief['depart_date']['display']} to {brief['return_date']['display']}. "
+        "Change anything you like, then press Compare complete plans."
+    )
+    session.add(Message(trip_id=trip.id, role="user", content=demo["message"]))
+    session.add(Message(trip_id=trip.id, role="assistant", content=reply))
     return trip
 
 

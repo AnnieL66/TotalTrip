@@ -27,6 +27,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   createTrip: (message?: string) => request<TripState>("/trips", { method: "POST", body: JSON.stringify({ message }) }),
+  createDemoTrip: (key: string) => request<TripState>(`/trips/demo/${key}`, { method: "POST" }),
   getTrip: (id: string) => request<TripState>(`/trips/${id}`),
   sendMessage: (id: string, text: string) =>
     request<TripState>(`/trips/${id}/messages`, { method: "POST", body: JSON.stringify({ text }) }),

@@ -5,10 +5,11 @@ import { useRef, useState } from "react";
 import { Header } from "@/components/Header";
 import { api, money, rememberTrip } from "@/lib/api";
 
-const STARTERS = [
-  { label: "I have a destination", text: "I'm going to Chicago, near " },
-  { label: "A weekend in Chicago", text: "A weekend near Millennium Park in Chicago, leaving from " },
-  { label: "A work trip", text: "A conference at McCormick Place, flying from " },
+// One-click sample trips; the backend defines each one in app/data/demo_trips.json.
+const DEMOS = [
+  { key: "newark_trap", label: "A weekend with a checked bag" },
+  { key: "newark_fits", label: "A work trip from Hoboken" },
+  { key: "tight_budget", label: "Visiting friends on a budget" },
 ];
 
 const INSPIRATION = [
@@ -17,10 +18,10 @@ const INSPIRATION = [
   { title: "Visiting friends", body: "Wicker Park, Logan Square and the Blue Line.", text: "Visiting friends in Wicker Park, leaving from " },
 ];
 
-// Illustrative example for the explainer card (solo traveler, Upper West Side → the Loop).
+// Illustrative example for the explainer card: the "newark_trap" sample trip. A backend test keeps these numbers in step.
 const EXAMPLE = [
-  { airport: "Newark", flights: 198, rides: 126 },
-  { airport: "LaGuardia", flights: 226, rides: 88 },
+  { airport: "Newark", flights: 243, rides: 268 },
+  { airport: "LaGuardia", flights: 304, rides: 168 },
 ];
 
 export default function Discover() {
@@ -29,6 +30,20 @@ export default function Discover() {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  async function startDemo(demo: (typeof DEMOS)[number]) {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const trip = await api.createDemoTrip(demo.key);
+      rememberTrip(trip.id, demo.label);
+      router.push(`/trip/${trip.id}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't start that sample trip. Is the API running?");
+      setBusy(false);
+    }
+  }
 
   function prefill(value: string) {
     setText(value);
@@ -97,15 +112,17 @@ export default function Discover() {
             </button>
           </div>
           {error && <p className="mt-2 text-center text-sm text-warn">{error}</p>}
-          <div className="mt-4 flex flex-wrap justify-center gap-2">
-            {STARTERS.map((s) => (
+          <p className="mt-4 text-center text-xs text-muted">Or try a sample trip:</p>
+          <div className="mt-2 flex flex-wrap justify-center gap-2">
+            {DEMOS.map((d) => (
               <button
-                key={s.label}
+                key={d.key}
                 type="button"
-                onClick={() => prefill(s.text)}
-                className="rounded-full border border-line bg-paper px-3.5 py-1.5 text-sm hover:border-plum-600"
+                onClick={() => startDemo(d)}
+                disabled={busy}
+                className="rounded-full border border-line bg-paper px-3.5 py-1.5 text-sm hover:border-plum-600 disabled:opacity-50"
               >
-                {s.label}
+                {d.label}
               </button>
             ))}
           </div>
@@ -116,8 +133,8 @@ export default function Discover() {
           <div>
             <h2 className="font-serif text-2xl leading-snug">The cheapest flight isn&apos;t always the cheapest trip.</h2>
             <p className="mt-3 text-sm leading-relaxed text-muted">
-              From the Upper West Side, a Newark flight that&apos;s {money(EXAMPLE[1].flights - EXAMPLE[0].flights)} cheaper
-              ends up costing more once you count the rides to and from the airport. TotalTrip counts them for you.
+              From the Upper West Side with a checked bag, Newark flights that are {money(EXAMPLE[1].flights - EXAMPLE[0].flights)} cheaper
+              end up costing more once you count the rides to and from the airport. TotalTrip counts them for you.
             </p>
           </div>
           <div className="flex flex-col justify-center gap-3" role="img" aria-label="Illustrative totals: Newark costs more door to door than LaGuardia">
