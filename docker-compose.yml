@@ -1,0 +1,15 @@
+# Local PostgreSQL + Redis. Then set DATABASE_URL and REDIS_URL in .env (see .env.example).
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: totaltrip
+      POSTGRES_PASSWORD: totaltrip
+      POSTGRES_DB: totaltrip
+    ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+  redis:
+    image: redis:7
+    ports: ["6379:6379"]
+volumes:
+  pgdata:

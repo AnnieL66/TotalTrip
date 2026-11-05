@@ -1,0 +1,21 @@
+{
+  "note": "Demo fares for the launch market. Deterministic per date so plans are reproducible. Not live prices.",
+  "block_minutes": {"NYC-CHI": 155, "CHI-NYC": 135},
+  "routes": [
+    {"origin": "EWR", "destination": "ORD", "airline": "UA", "fares": {"main": 139, "basic": 99}, "times": ["06:00", "08:30", "12:15", "17:40"]},
+    {"origin": "LGA", "destination": "ORD", "airline": "UA", "fares": {"main": 152, "basic": 112}, "times": ["07:00", "13:00", "18:30"]},
+    {"origin": "LGA", "destination": "ORD", "airline": "AA", "fares": {"main": 148, "basic": 108}, "times": ["06:30", "10:45", "16:15"]},
+    {"origin": "LGA", "destination": "ORD", "airline": "DL", "fares": {"main": 162, "basic": 121}, "times": ["08:00", "14:30"]},
+    {"origin": "LGA", "destination": "MDW", "airline": "WN", "fares": {"main": 124}, "times": ["07:25", "12:40", "19:05"]},
+    {"origin": "JFK", "destination": "ORD", "airline": "AA", "fares": {"main": 138, "basic": 96}, "times": ["09:15", "15:45"]},
+    {"origin": "JFK", "destination": "ORD", "airline": "B6", "fares": {"main": 129, "basic": 89}, "times": ["07:45", "19:30"]},
+
+    {"origin": "ORD", "destination": "EWR", "airline": "UA", "fares": {"main": 139, "basic": 99}, "times": ["07:00", "11:30", "16:45", "19:30"]},
+    {"origin": "ORD", "destination": "LGA", "airline": "UA", "fares": {"main": 152, "basic": 112}, "times": ["08:00", "15:00", "18:00"]},
+    {"origin": "ORD", "destination": "LGA", "airline": "AA", "fares": {"main": 148, "basic": 108}, "times": ["07:15", "12:30", "17:20", "20:05"]},
+    {"origin": "ORD", "destination": "LGA", "airline": "DL", "fares": {"main": 162, "basic": 121}, "times": ["09:30", "16:40"]},
+    {"origin": "MDW", "destination": "LGA", "airline": "WN", "fares": {"main": 124}, "times": ["08:10", "14:20", "18:45"]},
+    {"origin": "ORD", "destination": "JFK", "airline": "AA", "fares": {"main": 138, "basic": 96}, "times": ["10:30", "17:55"]},
+    {"origin": "ORD", "destination": "JFK", "airline": "B6", "fares": {"main": 129, "basic": 89}, "times": ["12:10", "20:15"]}
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "as_of": "2026-10-01",
+  "source": "TotalTrip bag-fee table (illustrative; verify against each airline's published fees before the pilot)",
+  "note": "carry_on null = a full-size carry-on is not included with this fare; TotalTrip prices it as a checked bag.",
+  "fees": {
+    "UA": {"main": {"carry_on": 0, "checked_1": 35, "checked_2": 45}, "basic": {"carry_on": null, "checked_1": 35, "checked_2": 45}},
+    "AA": {"main": {"carry_on": 0, "checked_1": 35, "checked_2": 45}, "basic": {"carry_on": 0, "checked_1": 35, "checked_2": 45}},
+    "DL": {"main": {"carry_on": 0, "checked_1": 35, "checked_2": 45}, "basic": {"carry_on": 0, "checked_1": 35, "checked_2": 45}},
+    "WN": {"main": {"carry_on": 0, "checked_1": 35, "checked_2": 45}, "basic": {"carry_on": 0, "checked_1": 35, "checked_2": 45}},
+    "B6": {"main": {"carry_on": 0, "checked_1": 35, "checked_2": 50}, "basic": {"carry_on": null, "checked_1": 35, "checked_2": 50}}
+  }
+}

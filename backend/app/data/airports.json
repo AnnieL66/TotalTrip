@@ -1,0 +1,20 @@
+{
+  "airports": {
+    "EWR": {"name": "Newark", "full_name": "Newark Liberty International", "metro": "NYC", "lat": 40.6895, "lng": -74.1745, "tz": "America/New_York"},
+    "LGA": {"name": "LaGuardia", "full_name": "LaGuardia Airport", "metro": "NYC", "lat": 40.7769, "lng": -73.8740, "tz": "America/New_York"},
+    "JFK": {"name": "JFK", "full_name": "John F. Kennedy International", "metro": "NYC", "lat": 40.6413, "lng": -73.7781, "tz": "America/New_York"},
+    "ORD": {"name": "O'Hare", "full_name": "Chicago O'Hare International", "metro": "CHI", "lat": 41.9742, "lng": -87.9073, "tz": "America/Chicago"},
+    "MDW": {"name": "Midway", "full_name": "Chicago Midway International", "metro": "CHI", "lat": 41.7868, "lng": -87.7522, "tz": "America/Chicago"}
+  },
+  "metros": {
+    "NYC": {"name": "New York", "tz": "America/New_York", "airports": ["EWR", "LGA", "JFK"]},
+    "CHI": {"name": "Chicago", "tz": "America/Chicago", "airports": ["ORD", "MDW"]}
+  },
+  "airlines": {
+    "UA": {"name": "United", "site": "https://www.united.com"},
+    "AA": {"name": "American", "site": "https://www.aa.com"},
+    "DL": {"name": "Delta", "site": "https://www.delta.com"},
+    "WN": {"name": "Southwest", "site": "https://www.southwest.com"},
+    "B6": {"name": "JetBlue", "site": "https://www.jetblue.com"}
+  }
+}
